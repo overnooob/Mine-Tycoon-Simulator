@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mine Tycoon Simulator</title>
+<style>
+:root{--bg:#dfe8ff;--card:#fff;--ink:#1b2340;--mut:#5b6588;--acc:#ff9f1c;--acc2:#2ec4b6;--line:#c3cff2;--bad:#e63946;--good:#2a9d5c;--bar:#e3e9fb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10142a;--card:#1a2040;--ink:#eef1ff;--mut:#9aa5d1;--line:#2c3566;--bar:#262e5a}}
+:root[data-theme="dark"]{--bg:#10142a;--card:#1a2040;--ink:#eef1ff;--mut:#9aa5d1;--line:#2c3566;--bar:#262e5a}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS",Verdana,system-ui,sans-serif}
+body{min-height:100vh;display:flex;justify-content:center}
+#app{width:100%;max-width:560px;padding:10px 12px 86px}
+.hud{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:6px 0}
+.row{display:flex;gap:8px;align-items:center}
+.pill{flex:1;background:var(--card);border:3px solid var(--line);border-radius:14px;padding:8px 12px;font-weight:800}
+.pill small{display:block;color:var(--mut);font-weight:600;font-size:11px}
+.bar{height:12px;background:var(--bar);border-radius:8px;overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--acc2);width:0;transition:width .15s}
+.card{background:var(--card);border:3px solid var(--line);border-radius:16px;padding:12px;margin:10px 0}
+h2{margin:6px 0;font-size:18px}p{margin:4px 0;color:var(--mut);font-size:13px}
+button{font:inherit;font-weight:800;border:0;border-radius:12px;padding:10px 14px;background:var(--acc);color:#1b2340;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.25);transition:transform .05s}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.g{background:var(--good);color:#fff}button.s{background:var(--bar);color:var(--ink)}
+.zones{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}.zones button{white-space:nowrap;flex:1}
+.zones button.on{outline:3px solid var(--acc2)}
+#rockWrap{position:relative;display:flex;justify-content:center;padding:14px 0}
+#rock{width:190px;height:190px;border-radius:50%;font-size:96px;line-height:1;background:radial-gradient(circle at 35% 30%,var(--card),var(--bar));border:5px solid var(--line);box-shadow:0 8px 0 rgba(0,0,0,.2)}
+#rock.hit{animation:hit .12s}@keyframes hit{50%{transform:scale(.9) rotate(-4deg)}}
+.fl{position:fixed;pointer-events:none;font-weight:900;color:var(--acc);text-shadow:0 2px 0 rgba(0,0,0,.5);animation:fl .8s forwards;z-index:20}
+@keyframes fl{to{transform:translateY(-60px);opacity:0}}
+.grid{display:flex;flex-wrap:wrap;gap:6px}.chip{background:var(--bar);border-radius:10px;padding:5px 9px;font-weight:700;font-size:13px}
+.up{display:flex;gap:10px;align-items:center}.up .ic{font-size:34px}.up .mid{flex:1}
+.pips{display:flex;gap:3px;margin-top:5px}.pips b{flex:1;height:8px;border-radius:4px;background:var(--bar)}.pips b.f{background:var(--acc2)}
+.Common{border-color:#8d99ae}.Rare{border-color:#3a86ff}.Epic{border-color:#9b5de5}.Legendary{border-color:#ffb703}
+.pet{display:inline-block;width:calc(33.3% - 6px);margin:3px;text-align:center;background:var(--bar);border:3px solid;border-radius:12px;padding:8px 2px;cursor:pointer;font-size:12px;font-weight:700;position:relative}
+.pet.on{background:var(--acc2);color:#10142a}.pet span{font-size:34px;display:block}.pet u{position:absolute;right:4px;top:0;text-decoration:none;color:var(--bad);font-size:15px}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;background:var(--card);border-top:3px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));z-index:6}
+nav div{display:flex;gap:6px;width:100%;max-width:560px}nav button{flex:1;padding:8px 2px;font-size:12px}nav button.on{background:var(--acc2)}
+#toast{position:fixed;top:calc(70px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--bad);color:#fff;font-weight:800;padding:8px 16px;border-radius:12px;opacity:0;transition:opacity .2s;z-index:30;pointer-events:none}
+.ver{color:var(--acc);font-weight:900}
+html:root:root{--bg:#1a0f3d;--card:#2a1b66;--ink:#fff;--mut:#bfb3f5;--acc:#ffd23f;--acc2:#22e6b8;--line:#5a3fd1;--bar:#3b2a8f;--good:#25c26e;--bad:#ff4d6d}
+body{background:radial-gradient(circle at 15% 0,#4b2bb8 0,transparent 45%),radial-gradient(circle at 90% 100%,#0a8f9c 0,transparent 40%),var(--bg);background-attachment:fixed}
+.hud{background:transparent;backdrop-filter:blur(6px)}
+.pill,.card{background:linear-gradient(180deg,#3a2792,#2a1b66);border:0;border-radius:20px;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 6px 0 #150a3a}
+h2{color:var(--acc);text-shadow:0 2px 0 rgba(0,0,0,.35)}
+button{background:linear-gradient(180deg,#ffe36e,#ffb703);border-radius:14px;box-shadow:inset 0 2px 0 rgba(255,255,255,.6),0 5px 0 #b36f00;text-transform:uppercase;letter-spacing:.4px;font-size:13px}
+button.g{background:linear-gradient(180deg,#5af2a0,#16a864);color:#04281a;box-shadow:inset 0 2px 0 rgba(255,255,255,.5),0 5px 0 #0b6b3f}
+button.s{background:linear-gradient(180deg,#5a45c9,#3b2a8f);color:#fff;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 5px 0 #1e1250}
+button:active{transform:translateY(4px);box-shadow:none}
+nav{background:#150a3a;border-top:0}nav button.on{background:linear-gradient(180deg,#5af2e0,#10b9a0);color:#042b27}
+#rock{background:radial-gradient(circle at 35% 30%,#8f7bff,#3b2a8f 70%);border:6px solid #ffd23f;box-shadow:0 0 40px rgba(255,210,63,.45),0 10px 0 #150a3a}
+.chip{background:rgba(0,0,0,.3)}.bar{background:rgba(0,0,0,.35)}.pips b{background:rgba(0,0,0,.35)}.pips b.f{background:linear-gradient(90deg,#22e6b8,#7dffe3)}
+.up .ic{filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
+input{width:100%;margin:6px 0 10px;padding:10px;border-radius:12px;border:3px solid var(--line);background:rgba(0,0,0,.3);color:var(--ink);font:inherit;font-weight:800}
+html:root:root{--bg:#7cd4ff;--card:#fff;--ink:#1d2b4f;--mut:#51648f;--acc:#ff7a1a;--acc2:#27c46b;--line:#1d2b4f;--bar:#dbe9ff;--good:#27c46b;--bad:#ff4040}
+body{background:linear-gradient(#4fc3ff,#c9f0ff) fixed}
+.hud{background:transparent;backdrop-filter:none}
+.pill,.card{background:#fff;border:4px solid #1d2b4f;border-radius:18px;box-shadow:0 6px 0 #1d2b4f}
+h2{color:#1d2b4f;text-shadow:none}
+button{background:linear-gradient(#ffb347,#ff7a1a);color:#fff;border:3px solid #1d2b4f;border-radius:14px;box-shadow:0 5px 0 #1d2b4f;text-shadow:0 2px 0 rgba(0,0,0,.35);text-transform:uppercase;font-size:13px;letter-spacing:.4px}
+button.g{background:linear-gradient(#5be38c,#27c46b);color:#fff;box-shadow:0 5px 0 #1d2b4f}
+button.s{background:linear-gradient(#fff,#d6e4ff);color:#1d2b4f;text-shadow:none;box-shadow:0 5px 0 #1d2b4f}
+button:active{transform:translateY(4px);box-shadow:0 1px 0 #1d2b4f}
+nav{background:#fff;border-top:4px solid #1d2b4f}nav button{font-size:10.5px;padding:8px 1px}nav button.on{background:linear-gradient(#5be38c,#27c46b);color:#fff}
+#rock{background:radial-gradient(circle at 35% 30%,#fff,#ffe29a 70%);border:5px solid #1d2b4f;box-shadow:0 10px 0 #1d2b4f}
+.chip{background:#eaf2ff;border:2px solid #1d2b4f}
+.bar{background:#dbe9ff;border:3px solid #1d2b4f;height:16px}.bar i{background:linear-gradient(#5be38c,#27c46b)}
+.pips b{background:#dbe9ff;border:2px solid #1d2b4f}.pips b.f{background:#ffb347}
+.pet.on{background:#9af0b9;color:#1d2b4f}
+input{border:3px solid #1d2b4f;background:#fff;color:#1d2b4f}
+.fl{color:#fff;text-shadow:-2px 0 #1d2b4f,2px 0 #1d2b4f,0 -2px #1d2b4f,0 2px #1d2b4f}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hud">
+    <div class="row">
+      <div class="pill">🪙 <span id="coins">0</span><small id="mult"></small></div>
+      <div class="pill">🎒 <span id="bagTxt">0/0</span><div class="bar"><i id="bagBar"></i></div></div>
+    </div>
+  </div>
+  <div id="view"></div>
+</div>
+<div id="toast"></div>
+<nav><div id="nav"></div></nav>
+
+<script>
+/* ===================== GAME DATA (add updates here) =====================
+   To ship a new update: 1) add an entry to UPDATES, 2) add zones to AREAS,
+   upgrades to UPGRADES, or pets to PETS. Old saves keep working automatically. */
+const KEY = "mineTycoonSave_v1";
+const UPDATES = [
+  { v: "1.0.0", t: "Grand Opening", n: ["3 mining zones with 9 ores", "6 upgrades, each with a level cap", "Auto Sell with ON/OFF switch", "Pets: hatch up to 12, equip 3", "Auto-save"] },
+  // Add new updates above this line
+];
+const VERSION = UPDATES[UPDATES.length - 1].v;
+
+// ores: [name, icon, sell value, spawn weight]
+const AREAS = [
+  { name: "Stone Quarry", icon: "⛰️", cost: 0, ores: [["Stone","🪨",1,60],["Coal","⚫",3,30],["Copper","🟠",8,10]] },
+  { name: "Crystal Cave", icon: "💎", cost: 3000, ores: [["Iron","🔩",14,55],["Silver","⚪",30,30],["Gold","🟡",70,15]] },
+  { name: "Magma Core",  icon: "🌋", cost: 40000, ores: [["Ruby","🔴",150,55],["Sapphire","🔵",350,33],["Diamond","💠",900,12]] }
+];
+// max = level cap, cost = base * grow^level
+const UPGRADES = [
+  { id:"power", name:"Stronger Pickaxe", icon:"⛏️", max:10, base:25,  grow:1.65, desc:"Ores mined per click",   val:l=>1+l,            show:l=>(1+l)+" ores/click" },
+  { id:"bag",   name:"Bigger Backpack",  icon:"🎒", max:12, base:40,  grow:1.6,  desc:"Backpack capacity",       val:l=>30+20*l,        show:l=>(30+20*l)+" slots" },
+  { id:"auto",  name:"Auto Miner",       icon:"🤖", max:10, base:150, grow:1.7,  desc:"Ores mined every second", val:l=>0.4*l,          show:l=>(0.4*l).toFixed(1)+" ores/s" },
+  { id:"value", name:"Ore Polisher",     icon:"✨", max:10, base:100, grow:1.75, desc:"Bonus coins when selling",val:l=>1+0.1*l,        show:l=>"+"+(l*10)+"% coins" },
+  { id:"luck",  name:"Lucky Charm",      icon:"🍀", max:8,  base:300, grow:1.8,  desc:"Better chance of rare ores", val:l=>l,           show:l=>"Luck "+l+"/8" },
+  { id:"autosell", name:"Auto Sell", icon:"💰", max:5, base:500, grow:2.2, desc:"Sells a full backpack for you", val:l=>l?0.5+0.1*l:0, show:l=>l?"Sells at "+Math.round((0.5+0.1*l)*100)+"% value":"Off" }
+];
+const MAX_PETS = 12, MAX_EQUIP = 3, EGG_COST = 1500;
+const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
+  { id:"cat",  n:"Cave Cat",   i:"🐱", r:"Common",    m:.05, w:35 },
+  { id:"mole", n:"Mole",       i:"🦔", r:"Common",    m:.06, w:25 },
+  { id:"fox",  n:"Ember Fox",  i:"🦊", r:"Rare",      m:.15, w:15 },
+  { id:"owl",  n:"Gem Owl",    i:"🦉", r:"Rare",      m:.18, w:12 },
+  { id:"dragon",n:"Mini Dragon",i:"🐲", r:"Epic",     m:.40, w:6 },
+  { id:"phoenix",n:"Phoenix",  i:"🐦‍🔥", r:"Legendary", m:.90, w:2 }
+];
+
+/* ===================== STATE ===================== */
+const DEF = { as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
+let S = load(), view = "mine", acc = 0;
+function load(){ try{ const r = JSON.parse(localStorage.getItem(KEY)); if(r) return Object.assign(structuredClone(DEF), r); }catch(e){} return structuredClone(DEF); }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+const $ = s => document.querySelector(s);
+const fmt = n => n>=1e9?(n/1e9).toFixed(2)+"B":n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e4?(n/1e3).toFixed(1)+"K":Math.floor(n).toLocaleString("en-US");
+const lvl = id => S.up[id]||0;
+const U = id => UPGRADES.find(u=>u.id===id);
+const cap = () => U("bag").val(lvl("bag"));
+const bagCount = () => Object.values(S.bag).reduce((a,b)=>a+b,0);
+const ORE = {}; AREAS.forEach(a=>a.ores.forEach(o=>ORE[o[0]]=o));
+const petMult = () => S.pets.filter(p=>p.on).reduce((a,p)=>a+PETS.find(x=>x.id===p.id).m,0);
+const coinMult = () => U("value").val(lvl("value")) * (1+petMult());
+const upCost = u => Math.round(u.base*Math.pow(u.grow,lvl(u.id)));
+
+/* ===================== ACTIONS ===================== */
+function pickOre(a){
+  const L = lvl("luck");
+  const ws = a.ores.map((o,i)=>o[3]*(1+L*0.25*i));
+  let r = Math.random()*ws.reduce((x,y)=>x+y,0);
+  for(let i=0;i<ws.length;i++){ if((r-=ws[i])<=0) return a.ores[i]; }
+  return a.ores[0];
+}
+function mine(n, silent){
+  let got = 0;
+  for(let i=0;i<n;i++){
+    if(bagCount()>=cap()){ if(!autoSell()){ if(!silent) toast("Backpack full! Sell your ores"); break; } }
+    const o = pickOre(AREAS[S.area]);
+    S.bag[o[0]] = (S.bag[o[0]]||0)+1; S.mined++; got++;
+  }
+  return got;
+}
+function clickRock(e){
+  const got = mine(U("power").val(lvl("power")));
+  const r = $("#rock"); r.classList.remove("hit"); void r.offsetWidth; r.classList.add("hit");
+  if(got){ float("+"+got, e.clientX, e.clientY); }
+  live();
+}
+function sellValue(){ return Math.floor(Object.entries(S.bag).reduce((a,[k,c])=>a+ORE[k][2]*c,0)*coinMult()); }
+function autoSell(){ const l=lvl("autosell"); if(!l||!S.as) return false; const v=Math.floor(sellValue()*U("autosell").val(l)); S.coins+=v; S.bag={}; float("+🪙"+fmt(v)+" auto",innerWidth/2,120); return true; }
+function sell(){
+  const v = sellValue(); if(!v) return toast("Nothing to sell");
+  S.coins += v; S.bag = {}; float("+🪙"+fmt(v), innerWidth/2, 120); save(); render();
+}
+function buyUp(id){
+  const u = U(id), c = upCost(u);
+  if(lvl(id)>=u.max || S.coins<c) return;
+  S.coins -= c; S.up[id] = lvl(id)+1; save(); render();
+}
+function zone(i){
+  const a = AREAS[i];
+  if(!S.unlocked.includes(i)){
+    if(S.coins<a.cost) return toast("Need 🪙"+fmt(a.cost));
+    S.coins -= a.cost; S.unlocked.push(i);
+  }
+  S.area = i; save(); render();
+}
+function hatch(){
+  if(S.coins<EGG_COST || S.pets.length>=MAX_PETS) return;
+  S.coins -= EGG_COST;
+  let r = Math.random()*PETS.reduce((a,p)=>a+p.w,0), pick = PETS[0];
+  for(const p of PETS){ if((r-=p.w)<=0){ pick = p; break; } }
+  S.pets.push({id:pick.id,on:false});
+  toast("You hatched "+pick.i+" "+pick.n+" ("+pick.r+")!", true); save(); render();
+}
+function togglePet(i){
+  const p = S.pets[i];
+  if(!p.on && S.pets.filter(x=>x.on).length>=MAX_EQUIP) return toast("Only "+MAX_EQUIP+" pets can be equipped");
+  p.on = !p.on; save(); render();
+}
+function release(i,e){ e.stopPropagation(); if(confirm("Release this pet forever?")){ S.pets.splice(i,1); save(); render(); } }
+function resetGame(){ if(confirm("Delete ALL progress?")){ S = structuredClone(DEF); save(); render(); } }
+
+/* ===================== UI ===================== */
+let tt; function toast(t, good){ const e=$("#toast"); e.textContent=t; e.style.background=good?"var(--good)":"var(--bad)"; e.style.opacity=1; clearTimeout(tt); tt=setTimeout(()=>e.style.opacity=0,1400); }
+function float(t,x,y){ const e=document.createElement("div"); e.className="fl"; e.textContent=t; e.style.left=(x-14)+"px"; e.style.top=(y-20)+"px"; document.body.appendChild(e); setTimeout(()=>e.remove(),800); }
+
+const VIEWS = {
+  mine(){
+    const a = AREAS[S.area];
+    return `<div class="zones">${AREAS.map((z,i)=>`<button class="${i===S.area?"on ":""}${S.unlocked.includes(i)?"s":""}" onclick="zone(${i})">${z.icon} ${z.name}${S.unlocked.includes(i)?"":"<br>🔒 🪙"+fmt(z.cost)}</button>`).join("")}</div>
+    <div id="rockWrap"><button id="rock" onclick="clickRock(event)">${a.icon}</button></div>
+    <div class="card"><h2>Ores here</h2><div class="grid">${a.ores.map(o=>`<span class="chip">${o[1]} ${o[0]} · 🪙${o[2]}</span>`).join("")}</div></div>
+    <div class="card"><h2>Backpack</h2><div class="grid" id="bagList"></div><p></p><button class="g" id="sellBtn" onclick="sell()"></button></div>`;
+  },
+  up(){
+    return UPGRADES.map(u=>{
+      const l = lvl(u.id), maxed = l>=u.max, c = upCost(u);
+      return `<div class="card up"><div class="ic">${u.icon}</div><div class="mid"><b>${u.name}</b> <span class="chip">Lv ${l}/${u.max}</span>
+      <p>${u.desc}: <b>${u.show(l)}</b>${maxed?"":" → "+u.show(l+1)}</p>
+      <div class="pips">${Array.from({length:u.max},(_,i)=>`<b class="${i<l?"f":""}"></b>`).join("")}</div></div>
+      <div style="display:grid;gap:6px">${u.id==="autosell"&&l?`<button class="s" onclick="S.as=!S.as;save();render()">${S.as?"ON":"OFF"}</button>`:""}<button ${maxed||S.coins<c?"disabled":""} onclick="buyUp('${u.id}')">${maxed?"MAX":"🪙 "+fmt(c)}</button></div></div>`;
+    }).join("");
+  },
+  pets(){
+    const eq = S.pets.filter(p=>p.on).length;
+    return `<div class="card"><h2>🥚 Pet Egg</h2><p>Hatch pets that boost your coins. Storage ${S.pets.length}/${MAX_PETS} · Equipped ${eq}/${MAX_EQUIP} · Bonus +${Math.round(petMult()*100)}%</p>
+    <button ${S.coins<EGG_COST||S.pets.length>=MAX_PETS?"disabled":""} onclick="hatch()">${S.pets.length>=MAX_PETS?"Storage full":"Hatch · 🪙 "+fmt(EGG_COST)}</button></div>
+    <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${d.n}<br>+${Math.round(d.m*100)}% · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
+    <p>Tap a pet to equip or unequip it.</p></div>
+    <div class="card"><p>Odds: ${PETS.map(p=>p.i+" "+p.r).join(" · ")}</p></div>`;
+  },
+  news(){
+    return [...UPDATES].reverse().map(u=>`<div class="card"><h2><span class="ver">v${u.v}</span> ${u.t}</h2>${u.n.map(x=>`<p>• ${x}</p>`).join("")}</div>`).join("")
+    ;
+  }
+};
+const TABS = [["mine","⛏️ Mine"],["up","⬆️ Upgrades"],["pets","🐾 Pets"],["news","📜 Updates"]];
+function render(){
+  $("#nav").innerHTML = TABS.map(t=>`<button class="${t[0]===view?"on":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("");
+  $("#view").innerHTML = VIEWS[view]();
+  live();
+}
+function live(){
+  $("#coins").textContent = fmt(S.coins);
+  $("#mult").textContent = "x"+coinMult().toFixed(2)+" coin multiplier";
+  const b = bagCount(), c = cap();
+  $("#bagTxt").textContent = b+"/"+c; $("#bagBar").style.width = (b/c*100)+"%";
+  $("#bagBar").style.background = b>=c ? "var(--bad)" : "var(--acc2)";
+  if(view==="mine"){
+    $("#bagList").innerHTML = b ? Object.entries(S.bag).map(([k,n])=>`<span class="chip">${ORE[k][1]} ${k} ×${n}</span>`).join("") : "<p>Empty. Tap the rock!</p>";
+    const sb = $("#sellBtn"); sb.textContent = "Sell all · 🪙 "+fmt(sellValue()); sb.disabled = !b;
+  }
+}
+
+/* ===================== LOOP ===================== */
+setInterval(()=>{
+  const r = U("auto").val(lvl("auto"));
+  if(r>0){ acc += r*0.1; while(acc>=1){ acc--; if(!mine(1,true)){ acc=0; break; } } live(); }
+},100);
+setInterval(()=>{ if(view==="up"||view==="pets") render(); save(); },1000);
+render();
+</script>
+</body>
+</html>
