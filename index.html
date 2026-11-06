@@ -72,13 +72,15 @@ nav{background:#fff;border-top:4px solid #1d2b4f}nav button{font-size:10.5px;pad
 input{border:3px solid #1d2b4f;background:#fff;color:#1d2b4f}
 .fl{color:#fff;text-shadow:-2px 0 #1d2b4f,2px 0 #1d2b4f,0 -2px #1d2b4f,0 2px #1d2b4f}
 .Secret{border-color:#ff2bd6}.pet.gold{border-color:#ffb703;box-shadow:0 0 14px #ffd23f}
+#toast{max-width:92vw;text-align:center;white-space:pre-line;line-height:1.35}
+.Divine{border-color:#00e5ff}.pet.Divine{box-shadow:0 0 12px #00e5ff}
 </style>
 </head>
 <body>
 <div id="app">
   <div class="hud">
     <div class="row">
-      <div class="pill">🪙 <span id="coins">0</span><small id="mult"></small></div>
+      <button id="mute" class="s" onclick="toggleMute()" style="padding:10px 12px;font-size:20px">🔊</button><div class="pill">🪙 <span id="coins">0</span><small id="mult"></small></div>
       <div class="pill">🎒 <span id="bagTxt">0/0</span><div class="bar"><i id="bagBar"></i></div></div>
     </div>
   </div>
@@ -96,6 +98,7 @@ const UPDATES = [
   { v: "1.0.0", t: "Grand Opening", n: ["3 mining zones with 9 ores", "6 upgrades, each with a level cap", "Auto Sell with ON/OFF switch", "Pets: hatch up to 12, equip 3", "Auto-save"] },
   { v: "1.1.0", t: "The Frozen Update", n: ["New zone: Frozen Tundra with 3 new ores (unlock for 400K)", "New upgrade: Critical Strike (8 levels, x3 ore clicks)", "New upgrade: Pet Slots (3 levels, equip up to 6 pets)", "Every zone has its own egg with its own pets, and you can only hatch the egg of the zone you are in (Stone, Crystal, Magma, Frost)", "12 new pets, including the Legendary Cosmic Whale", "Daily Gift: claim free coins every 24 hours", "Auto Miner now has an ON/OFF switch", "Releasing Common or Rare pets no longer asks for confirmation (Epic and Legendary still do)"] },
   { v: "1.1.5", t: "Golden Mini Update", n: ["Auto-delete: tap a pet in the odds list (Normal or Golden tab) to delete it automatically when it drops", "New Secret pet: Void Serpent in the Frost Egg (0.1% chance)", "Golden pets: merge 5 identical pets into 1 Golden pet with double bonus", "1% base chance to hatch a Golden pet from any egg", "Odds list can switch between Normal and Golden", "New upgrade: More Storage (5 levels, up to 27 pet slots)", "New upgrade: Golden Luck (6 levels, up to 4% golden chance)"] },
+  { v: "1.2.0", t: "The Sky Update", n: ["New zone: Sky Citadel with 3 new ores (unlock for 6M)", "New Sky Egg with 6 new pets, including the Secret Celestial Peacock (0.1%) and the Divine Archangel Lion (0.01%)", "New upgrade: Double Drop (8 levels, ores can drop twice)", "New upgrade: Multi Hatch (2 levels, hatch x3 and then x5)", "Multi Hatch shows every pet you hatched in one list", "Sound effects and music, with a mute button in the top left corner"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -105,7 +108,8 @@ const AREAS = [
   { name: "Stone Quarry", icon: "⛰️", cost: 0, ores: [["Stone","🪨",1,60],["Coal","⚫",3,30],["Copper","🟠",8,10]] },
   { name: "Crystal Cave", icon: "💎", cost: 3000, ores: [["Iron","🔩",14,55],["Silver","⚪",30,30],["Gold","🟡",70,15]] },
   { name: "Magma Core",  icon: "🌋", cost: 40000, ores: [["Ruby","🔴",150,55],["Sapphire","🔵",350,33],["Diamond","💠",900,12]] },
-  { name: "Frozen Tundra", icon: "❄️", cost: 400000, ores: [["Frostite","🧊",1100,55],["Moonstone","🌙",2600,33],["Starlight","🌟",7000,12]] }
+  { name: "Frozen Tundra", icon: "❄️", cost: 400000, ores: [["Frostite","🧊",1100,55],["Moonstone","🌙",2600,33],["Starlight","🌟",7000,12]] },
+  { name: "Sky Citadel", icon: "☁️", cost: 6000000, ores: [["Cloudstone","⛅",11000,55],["Skyglass","🔷",26000,33],["Aether","💫",70000,12]] }
 ];
 // max = level cap, cost = base * grow^level
 const UPGRADES = [
@@ -118,7 +122,9 @@ const UPGRADES = [
   { id:"crit", name:"Critical Strike", icon:"💥", max:8, base:400, grow:1.75, desc:"Chance for a x3 ore click", val:l=>l*4, show:l=>(l*4)+"% crit chance" },
   { id:"slots", name:"Pet Slots", icon:"🐾", max:3, base:5000, grow:4, desc:"Pets you can equip", val:l=>3+l, show:l=>(3+l)+" pets" },
   { id:"storage", name:"More Storage", icon:"📦", max:5, base:3000, grow:2.5, desc:"Pet storage slots", val:l=>12+3*l, show:l=>(12+3*l)+" slots" },
-  { id:"goldluck", name:"Golden Luck", icon:"🌟", max:6, base:20000, grow:2.4, desc:"Golden pet chance from eggs", val:l=>0.01+0.005*l, show:l=>(1+0.5*l).toFixed(1)+"% golden chance" }
+  { id:"goldluck", name:"Golden Luck", icon:"🌟", max:6, base:20000, grow:2.4, desc:"Golden pet chance from eggs", val:l=>0.01+0.005*l, show:l=>(1+0.5*l).toFixed(1)+"% golden chance" },
+  { id:"dbl", name:"Double Drop", icon:"🎲", max:8, base:1000, grow:1.8, desc:"Chance for an ore to drop twice", val:l=>l*5, show:l=>(l*5)+"% double drop" },
+  { id:"multi", name:"Multi Hatch", icon:"🐣", max:2, base:60000, grow:5, desc:"Hatch several eggs at once", val:l=>[1,3,5][l], show:l=>"Hatch x"+[1,3,5][l] }
 ];
 const goldChance = () => 0.01+0.005*lvl("goldluck");
 const maxPets = () => 12+3*lvl("storage");
@@ -127,10 +133,11 @@ const EGGS = [ // index = zone index. pool = { petId: weight }. Each zone has it
   { n:"Stone Egg",   i:"🥚", cost:1500,    pool:{cat:35,mole:25,fox:15,owl:12,dragon:6,phoenix:2} },
   { n:"Crystal Egg", i:"🔮", cost:12000,   pool:{bat:45,lizard:30,golem:20,stag:5} },
   { n:"Magma Egg",   i:"🌋", cost:120000,  pool:{crab:35,gator:30,bull:25,drake:10} },
-  { n:"Frost Egg",   i:"🧊", cost:1200000, pool:{bunny:30,wolf:35,mammoth:25,whale:9.9,void:.1} }
+  { n:"Frost Egg",   i:"🧊", cost:1200000, pool:{bunny:30,wolf:35,mammoth:25,whale:9.9,void:.1} },
+  { n:"Sky Egg",     i:"🌈", cost:12000000, pool:{sheep:30,eagle:35,unicorn:25,leviathan:9.89,peacock:.1,divine:.01} }
 ];
 let oddsGold = false;
-const fp = n => n<1 ? n.toFixed(n<.01?3:2) : n.toFixed(1);
+const fp = n => n<1 ? n.toFixed(n<.001?4:n<.01?3:2) : n.toFixed(1);
 const eggPets = g => { const T=Object.values(g.pool).reduce((a,b)=>a+b,0); return Object.entries(g.pool).map(([id,w])=>({p:PETS.find(x=>x.id===id),pct:w/T*100})); };
 const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
   { id:"bat", n:"Gem Bat", i:"🦇", r:"Common", m:.10 },
@@ -146,6 +153,12 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
   { id:"mammoth", n:"Snow Mammoth", i:"🦣", r:"Epic", m:1.2 },
   { id:"whale", n:"Cosmic Whale", i:"🐋", r:"Legendary", m:1.8 },
   { id:"void", n:"Void Serpent", i:"🐍", r:"Secret", m:3.5 },
+  { id:"sheep", n:"Cloud Sheep", i:"🐑", r:"Rare", m:.8 },
+  { id:"eagle", n:"Storm Eagle", i:"🦅", r:"Epic", m:1.5 },
+  { id:"unicorn", n:"Aether Unicorn", i:"🦄", r:"Epic", m:1.9 },
+  { id:"leviathan", n:"Sky Leviathan", i:"🐳", r:"Legendary", m:2.6 },
+  { id:"peacock", n:"Celestial Peacock", i:"🦚", r:"Secret", m:6.0 },
+  { id:"divine", n:"Archangel Lion", i:"🦁", r:"Divine", m:12.0 },
   { id:"cat",  n:"Cave Cat",   i:"🐱", r:"Common",    m:.05, w:35 },
   { id:"mole", n:"Mole",       i:"🦔", r:"Common",    m:.06, w:25 },
   { id:"fox",  n:"Ember Fox",  i:"🦊", r:"Rare",      m:.15, w:15 },
@@ -155,7 +168,7 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
 ];
 
 /* ===================== STATE ===================== */
-const DEF = { del:{}, delg:{}, gift:0, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
+const DEF = { mute:false, del:{}, delg:{}, gift:0, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
 let S = load(), view = "mine", acc = 0;
 function load(){ try{ const r = JSON.parse(localStorage.getItem(KEY)); if(r) return Object.assign(structuredClone(DEF), r); }catch(e){} return structuredClone(DEF); }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -185,6 +198,7 @@ function mine(n, silent){
     if(bagCount()>=cap()){ if(!autoSell()){ if(!silent) toast("Backpack full! Sell your ores"); break; } }
     const o = pickOre(AREAS[S.area]);
     S.bag[o[0]] = (S.bag[o[0]]||0)+1; S.mined++; got++;
+    if(bagCount()<cap() && Math.random()*100<U("dbl").val(lvl("dbl"))){ S.bag[o[0]]++; got++; }
   }
   return got;
 }
@@ -192,10 +206,14 @@ function clickRock(e){
   const crit = Math.random()*100 < U("crit").val(lvl("crit"));
   const got = mine(U("power").val(lvl("power"))*(crit?3:1));
   const r = $("#rock"); r.classList.remove("hit"); void r.offsetWidth; r.classList.add("hit");
-  if(got){ float((crit?"💥 CRIT! +":"+")+got, e.clientX, e.clientY); }
+  if(got){ sfx(crit?"crit":"mine"); float((crit?"💥 CRIT! +":"+")+got, e.clientX, e.clientY); }
   live();
 }
 function sellValue(){ return Math.floor(Object.entries(S.bag).reduce((a,[k,c])=>a+ORE[k][2]*c,0)*coinMult()); }
+function hatchN(k,n){
+  const res=[]; for(let i=0;i<n;i++){ const r=hatch(k,true); if(r) res.push(r); }
+  if(!res.length) return; save(); render(); toast("You hatched:\n"+res.join("\n"), true);
+}
 function togDel(id){ const m=oddsGold?S.delg:S.del; m[id]=!m[id]; save(); render(); }
 function mergeInfo(){
   const c={}; S.pets.forEach(p=>{ if(!p.g) c[p.id]=(c[p.id]||0)+1; });
@@ -231,16 +249,18 @@ function zone(i){
   }
   S.area = i; save(); render();
 }
-function hatch(k){
+function hatch(k,quiet){
   const g=EGGS[k];
   if(k!==S.area || S.coins<g.cost || S.pets.length>=maxPets()) return;
   S.coins -= g.cost;
   let r = Math.random()*100, pick = eggPets(g)[0].p;
   for(const x of eggPets(g)){ if((r-=x.pct)<=0){ pick = x.p; break; } }
   const gold = Math.random() < goldChance();
-  if((gold?S.delg:S.del)[pick.id]){ toast("🗑️ Auto-deleted "+(gold?"Golden ":"")+pick.n); save(); render(); return; }
+  const nm = (gold?"✨ Golden ":"")+pick.i+" "+pick.n;
+  if((gold?S.delg:S.del)[pick.id]){ if(quiet) return "🗑️ "+nm; toast("🗑️ Auto-deleted "+nm); save(); render(); return; }
   S.pets.push({id:pick.id,on:false,g:gold});
-  toast("You hatched "+(gold?"✨ GOLDEN ":"")+pick.i+" "+pick.n+" ("+pick.r+")!", true); save(); render();
+  if(quiet) return nm+" ("+pick.r+")";
+  toast("You hatched "+nm+" ("+pick.r+")!", true); save(); render();
 }
 function togglePet(i){
   const p = S.pets[i];
@@ -251,7 +271,7 @@ function release(i,e){ e.stopPropagation(); const d=PETS.find(x=>x.id===S.pets[i
 function resetGame(){ if(confirm("Delete ALL progress?")){ S = structuredClone(DEF); save(); render(); } }
 
 /* ===================== UI ===================== */
-let tt; function toast(t, good){ const e=$("#toast"); e.textContent=t; e.style.background=good?"var(--good)":"var(--bad)"; e.style.opacity=1; clearTimeout(tt); tt=setTimeout(()=>e.style.opacity=0,1400); }
+let tt; function toast(t, good){ const e=$("#toast"); e.textContent=t; e.style.background=good?"var(--good)":"var(--bad)"; e.style.opacity=1; clearTimeout(tt); tt=setTimeout(()=>e.style.opacity=0,Math.max(1400,t.length*45)); }
 function float(t,x,y){ const e=document.createElement("div"); e.className="fl"; e.textContent=t; e.style.left=(x-14)+"px"; e.style.top=(y-20)+"px"; document.body.appendChild(e); setTimeout(()=>e.remove(),800); }
 
 const VIEWS = {
@@ -274,7 +294,7 @@ const VIEWS = {
   },
   pets(){
     const eq = S.pets.filter(p=>p.on).length;
-    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button></div>`})()}</div>
+    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button>${lvl("multi")?`<button class="g" ${S.coins<g.cost*[1,3,5][lvl("multi")]||S.pets.length+[1,3,5][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5][lvl("multi")]})">x${[1,3,5][lvl("multi")]}</button>`:""}</div>`})()}</div>
     <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><div class="grid">${mergeInfo()}</div></div>
     <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""} ${p.g?"gold":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${p.g?"Golden ":""}${d.n}<br>+${Math.round(d.m*(p.g?2:1)*100)}% · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
     <p>Tap a pet to equip or unequip it.</p></div>
@@ -292,6 +312,7 @@ function render(){
   live();
 }
 function live(){
+  $("#mute").textContent = S.mute ? "🔇" : "🔊";
   $("#coins").textContent = fmt(S.coins);
   $("#mult").textContent = "x"+coinMult().toFixed(2)+" coin multiplier";
   const b = bagCount(), c = cap();
@@ -302,6 +323,63 @@ function live(){
     const sb = $("#sellBtn"); sb.textContent = "Sell all · 🪙 "+fmt(sellValue()); sb.disabled = !b;
   }
 }
+
+/* ===================== AUDIO (all synthesized, no files) ===================== */
+let AC, master, mg, nextT = 0, bar = 0;
+function audio(){
+  if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = S.mute?0:.5; master.connect(AC.destination); mg = AC.createGain(); mg.gain.value = .6; mg.connect(master); nextT = AC.currentTime+.1; }catch(e){} }
+  if(AC && AC.state==="suspended") AC.resume();
+  return AC;
+}
+function tone(f,t0,d,type,v,dest){
+  const o=AC.createOscillator(), g=AC.createGain(); o.type=type||"square"; o.frequency.value=f;
+  g.gain.setValueAtTime(v||.15,t0); g.gain.exponentialRampToValueAtTime(.001,t0+d);
+  o.connect(g); g.connect(dest||master); o.start(t0); o.stop(t0+d+.02);
+}
+function sfx(n,tier,gold){
+  if(S.mute || !audio()) return; const t=AC.currentTime;
+  if(n==="mine") tone(160+Math.random()*80,t,.07,"triangle",.3);
+  else if(n==="crit") [440,660,880].forEach((f,i)=>tone(f,t+i*.07,.14,"square",.14));
+  else if(n==="coin"){ tone(988,t,.08,"square",.12); tone(1319,t+.08,.25,"square",.12); }
+  else if(n==="buy") [523,659,784,1047].forEach((f,i)=>tone(f,t+i*.07,.15,"square",.12));
+  else if(n==="magic") [659,784,988,1319,1568].forEach((f,i)=>tone(f,t+i*.08,.2,"triangle",.2));
+  else if(n==="click") tone(600,t,.04,"square",.08);
+  else if(n==="del"){ tone(300,t,.1,"triangle",.2); tone(200,t+.08,.15,"triangle",.2); }
+  else if(n==="err") tone(120,t,.2,"sawtooth",.15);
+  else if(n==="hatch"){
+    [0,1,2].forEach(i=>tone(200+i*50,t+i*.13,.1,"triangle",.25));
+    const sc=[523,659,784,1047,1319,1568];
+    for(let i=0;i<Math.min(2+tier,6);i++) tone(sc[i],t+.45+i*.09,.3,"square",.12);
+    if(gold) tone(2093,t+.9,.5,"sine",.15);
+  }
+}
+const CH = [[57,60,64],[53,57,60],[60,64,67],[55,59,62]], mf = m => 440*Math.pow(2,(m-69)/12);
+function playBar(t,b){
+  const c = CH[b%4];
+  for(let i=0;i<8;i++) tone(mf(c[[0,1,2,1,0,1,2,1][i]]+12),t+i*.2,.18,"triangle",.09,mg);
+  tone(mf(c[0]-12),t,.7,"sine",.22,mg); tone(mf(c[0]-12),t+.8,.7,"sine",.22,mg);
+}
+setInterval(()=>{ if(S.mute||!AC) return; while(nextT<AC.currentTime+2.5){ playBar(nextT,bar++); nextT+=1.6; } },500);
+function toggleMute(){
+  S.mute = !S.mute; save();
+  if(audio()){ master.gain.value = S.mute?0:.5; if(!S.mute){ nextT = AC.currentTime+.1; sfx("buy"); } }
+  live();
+}
+addEventListener("pointerdown",()=>{ if(!S.mute) audio(); });
+addEventListener("click",e=>{ if(e.target.closest && e.target.closest("nav button")) sfx("click"); });
+function wrap(name,fn){ const o=window[name]; window[name]=function(...a){ return fn(o,a); }; }
+wrap("sell",(o,a)=>{ const c=S.coins; o(...a); if(S.coins>c) sfx("coin"); });
+wrap("buyUp",(o,a)=>{ const c=S.coins; o(...a); if(S.coins<c) sfx("buy"); });
+wrap("zone",(o,a)=>{ const c=S.coins, z=S.area; o(...a); if(S.coins<c) sfx("buy"); else if(S.area!==z) sfx("click"); });
+wrap("claimGift",(o,a)=>{ const c=S.coins; o(...a); if(S.coins>c) sfx("coin"); });
+wrap("merge",(o,a)=>{ const n=S.pets.length; o(...a); if(S.pets.length<n) sfx("magic"); });
+wrap("autoSell",(o,a)=>{ const r=o(...a); if(r) sfx("coin"); return r; });
+wrap("toast",(o,a)=>{
+  o(...a); const t=String(a[0]);
+  if(/hatched/.test(t)) sfx("hatch",/Divine/.test(t)?5:/Secret/.test(t)?4:/Legendary/.test(t)?3:/Epic/.test(t)?2:/Rare/.test(t)?1:0,/Golden/.test(t));
+  else if(t.indexOf("🗑")===0) sfx("del");
+  else if(!a[1]) sfx("err");
+});
 
 /* ===================== LOOP ===================== */
 setInterval(()=>{
