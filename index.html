@@ -71,6 +71,7 @@ nav{background:#fff;border-top:4px solid #1d2b4f}nav button{font-size:10.5px;pad
 .pet.on{background:#9af0b9;color:#1d2b4f}
 input{border:3px solid #1d2b4f;background:#fff;color:#1d2b4f}
 .fl{color:#fff;text-shadow:-2px 0 #1d2b4f,2px 0 #1d2b4f,0 -2px #1d2b4f,0 2px #1d2b4f}
+.Secret{border-color:#ff2bd6}.pet.gold{border-color:#ffb703;box-shadow:0 0 14px #ffd23f}
 </style>
 </head>
 <body>
@@ -94,6 +95,7 @@ const KEY = "mineTycoonSave_v1";
 const UPDATES = [
   { v: "1.0.0", t: "Grand Opening", n: ["3 mining zones with 9 ores", "6 upgrades, each with a level cap", "Auto Sell with ON/OFF switch", "Pets: hatch up to 12, equip 3", "Auto-save"] },
   { v: "1.1.0", t: "The Frozen Update", n: ["New zone: Frozen Tundra with 3 new ores (unlock for 400K)", "New upgrade: Critical Strike (8 levels, x3 ore clicks)", "New upgrade: Pet Slots (3 levels, equip up to 6 pets)", "Every zone has its own egg with its own pets, and you can only hatch the egg of the zone you are in (Stone, Crystal, Magma, Frost)", "12 new pets, including the Legendary Cosmic Whale", "Daily Gift: claim free coins every 24 hours", "Auto Miner now has an ON/OFF switch", "Releasing Common or Rare pets no longer asks for confirmation (Epic and Legendary still do)"] },
+  { v: "1.1.5", t: "Golden Mini Update", n: ["Auto-delete: tap a pet in the odds list (Normal or Golden tab) to delete it automatically when it drops", "New Secret pet: Void Serpent in the Frost Egg (0.1% chance)", "Golden pets: merge 5 identical pets into 1 Golden pet with double bonus", "1% base chance to hatch a Golden pet from any egg", "Odds list can switch between Normal and Golden", "New upgrade: More Storage (5 levels, up to 27 pet slots)", "New upgrade: Golden Luck (6 levels, up to 4% golden chance)"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -114,16 +116,21 @@ const UPGRADES = [
   { id:"luck",  name:"Lucky Charm",      icon:"🍀", max:8,  base:300, grow:1.8,  desc:"Better chance of rare ores", val:l=>l,           show:l=>"Luck "+l+"/8" },
   { id:"autosell", name:"Auto Sell", icon:"💰", max:5, base:500, grow:2.2, desc:"Sells a full backpack for you", val:l=>l?0.5+0.1*l:0, show:l=>l?"Sells at "+Math.round((0.5+0.1*l)*100)+"% value":"Off" },
   { id:"crit", name:"Critical Strike", icon:"💥", max:8, base:400, grow:1.75, desc:"Chance for a x3 ore click", val:l=>l*4, show:l=>(l*4)+"% crit chance" },
-  { id:"slots", name:"Pet Slots", icon:"🐾", max:3, base:5000, grow:4, desc:"Pets you can equip", val:l=>3+l, show:l=>(3+l)+" pets" }
+  { id:"slots", name:"Pet Slots", icon:"🐾", max:3, base:5000, grow:4, desc:"Pets you can equip", val:l=>3+l, show:l=>(3+l)+" pets" },
+  { id:"storage", name:"More Storage", icon:"📦", max:5, base:3000, grow:2.5, desc:"Pet storage slots", val:l=>12+3*l, show:l=>(12+3*l)+" slots" },
+  { id:"goldluck", name:"Golden Luck", icon:"🌟", max:6, base:20000, grow:2.4, desc:"Golden pet chance from eggs", val:l=>0.01+0.005*l, show:l=>(1+0.5*l).toFixed(1)+"% golden chance" }
 ];
-const MAX_PETS = 12;
+const goldChance = () => 0.01+0.005*lvl("goldluck");
+const maxPets = () => 12+3*lvl("storage");
 const maxEq = () => 3+lvl("slots");
 const EGGS = [ // index = zone index. pool = { petId: weight }. Each zone has its own egg with its own pets
   { n:"Stone Egg",   i:"🥚", cost:1500,    pool:{cat:35,mole:25,fox:15,owl:12,dragon:6,phoenix:2} },
   { n:"Crystal Egg", i:"🔮", cost:12000,   pool:{bat:45,lizard:30,golem:20,stag:5} },
   { n:"Magma Egg",   i:"🌋", cost:120000,  pool:{crab:35,gator:30,bull:25,drake:10} },
-  { n:"Frost Egg",   i:"🧊", cost:1200000, pool:{bunny:30,wolf:35,mammoth:25,whale:10} }
+  { n:"Frost Egg",   i:"🧊", cost:1200000, pool:{bunny:30,wolf:35,mammoth:25,whale:9.9,void:.1} }
 ];
+let oddsGold = false;
+const fp = n => n<1 ? n.toFixed(n<.01?3:2) : n.toFixed(1);
 const eggPets = g => { const T=Object.values(g.pool).reduce((a,b)=>a+b,0); return Object.entries(g.pool).map(([id,w])=>({p:PETS.find(x=>x.id===id),pct:w/T*100})); };
 const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
   { id:"bat", n:"Gem Bat", i:"🦇", r:"Common", m:.10 },
@@ -138,6 +145,7 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
   { id:"wolf", n:"Frost Wolf", i:"🐺", r:"Epic", m:1.0 },
   { id:"mammoth", n:"Snow Mammoth", i:"🦣", r:"Epic", m:1.2 },
   { id:"whale", n:"Cosmic Whale", i:"🐋", r:"Legendary", m:1.8 },
+  { id:"void", n:"Void Serpent", i:"🐍", r:"Secret", m:3.5 },
   { id:"cat",  n:"Cave Cat",   i:"🐱", r:"Common",    m:.05, w:35 },
   { id:"mole", n:"Mole",       i:"🦔", r:"Common",    m:.06, w:25 },
   { id:"fox",  n:"Ember Fox",  i:"🦊", r:"Rare",      m:.15, w:15 },
@@ -147,7 +155,7 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
 ];
 
 /* ===================== STATE ===================== */
-const DEF = { gift:0, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
+const DEF = { del:{}, delg:{}, gift:0, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
 let S = load(), view = "mine", acc = 0;
 function load(){ try{ const r = JSON.parse(localStorage.getItem(KEY)); if(r) return Object.assign(structuredClone(DEF), r); }catch(e){} return structuredClone(DEF); }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -159,7 +167,7 @@ const U = id => UPGRADES.find(u=>u.id===id);
 const cap = () => U("bag").val(lvl("bag"));
 const bagCount = () => Object.values(S.bag).reduce((a,b)=>a+b,0);
 const ORE = {}; AREAS.forEach(a=>a.ores.forEach(o=>ORE[o[0]]=o));
-const petMult = () => S.pets.filter(p=>p.on).reduce((a,p)=>a+PETS.find(x=>x.id===p.id).m,0);
+const petMult = () => S.pets.filter(p=>p.on).reduce((a,p)=>a+PETS.find(x=>x.id===p.id).m*(p.g?2:1),0);
 const coinMult = () => U("value").val(lvl("value")) * (1+petMult());
 const upCost = u => Math.round(u.base*Math.pow(u.grow,lvl(u.id)));
 
@@ -188,6 +196,17 @@ function clickRock(e){
   live();
 }
 function sellValue(){ return Math.floor(Object.entries(S.bag).reduce((a,[k,c])=>a+ORE[k][2]*c,0)*coinMult()); }
+function togDel(id){ const m=oddsGold?S.delg:S.del; m[id]=!m[id]; save(); render(); }
+function mergeInfo(){
+  const c={}; S.pets.forEach(p=>{ if(!p.g) c[p.id]=(c[p.id]||0)+1; });
+  return Object.keys(c).map(id=>{ const d=PETS.find(x=>x.id===id); return c[id]>=5 ? `<button class="g" onclick="merge('${id}')">${d.i} Merge ${d.n} x5</button>` : `<span class="chip">${d.i} ${d.n} ${c[id]}/5</span>`; }).join("") || "<p>No pets to merge yet.</p>";
+}
+function merge(id){
+  const idx = S.pets.map((p,i)=>({p,i})).filter(x=>x.p.id===id&&!x.p.g).sort((a,b)=>a.p.on-b.p.on).slice(0,5).map(x=>x.i);
+  if(idx.length<5) return;
+  S.pets = S.pets.filter((_,i)=>!idx.includes(i)); S.pets.push({id,on:false,g:true});
+  toast("✨ Golden "+PETS.find(x=>x.id===id).n+" created!", true); save(); render();
+}
 function tog(id){ const k=id==="auto"?"am":"as"; S[k]=!S[k]; save(); render(); }
 function claimGift(){
   if(Date.now()-S.gift<864e5) return;
@@ -214,19 +233,21 @@ function zone(i){
 }
 function hatch(k){
   const g=EGGS[k];
-  if(k!==S.area || S.coins<g.cost || S.pets.length>=MAX_PETS) return;
+  if(k!==S.area || S.coins<g.cost || S.pets.length>=maxPets()) return;
   S.coins -= g.cost;
   let r = Math.random()*100, pick = eggPets(g)[0].p;
   for(const x of eggPets(g)){ if((r-=x.pct)<=0){ pick = x.p; break; } }
-  S.pets.push({id:pick.id,on:false});
-  toast("You hatched "+pick.i+" "+pick.n+" ("+pick.r+")!", true); save(); render();
+  const gold = Math.random() < goldChance();
+  if((gold?S.delg:S.del)[pick.id]){ toast("🗑️ Auto-deleted "+(gold?"Golden ":"")+pick.n); save(); render(); return; }
+  S.pets.push({id:pick.id,on:false,g:gold});
+  toast("You hatched "+(gold?"✨ GOLDEN ":"")+pick.i+" "+pick.n+" ("+pick.r+")!", true); save(); render();
 }
 function togglePet(i){
   const p = S.pets[i];
   if(!p.on && S.pets.filter(x=>x.on).length>=maxEq()) return toast("Only "+maxEq()+" pets can be equipped");
   p.on = !p.on; save(); render();
 }
-function release(i,e){ e.stopPropagation(); const d=PETS.find(x=>x.id===S.pets[i].id); if(d.r==="Common"||d.r==="Rare"||confirm("Release this "+d.r+" pet forever?")){ S.pets.splice(i,1); save(); render(); } }
+function release(i,e){ e.stopPropagation(); const d=PETS.find(x=>x.id===S.pets[i].id); if(((d.r==="Common"||d.r==="Rare")&&!S.pets[i].g)||confirm("Release this "+(S.pets[i].g?"Golden ":"")+d.r+" pet forever?")){ S.pets.splice(i,1); save(); render(); } }
 function resetGame(){ if(confirm("Delete ALL progress?")){ S = structuredClone(DEF); save(); render(); } }
 
 /* ===================== UI ===================== */
@@ -253,10 +274,11 @@ const VIEWS = {
   },
   pets(){
     const eq = S.pets.filter(p=>p.on).length;
-    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${MAX_PETS} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=MAX_PETS?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button></div>`})()}</div>
-    <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${d.n}<br>+${Math.round(d.m*100)}% · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
+    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button></div>`})()}</div>
+    <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><div class="grid">${mergeInfo()}</div></div>
+    <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""} ${p.g?"gold":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${p.g?"Golden ":""}${d.n}<br>+${Math.round(d.m*(p.g?2:1)*100)}% · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
     <p>Tap a pet to equip or unequip it.</p></div>
-    <div class="card"><h2>${EGGS[S.area].n} odds</h2><div class="grid">${eggPets(EGGS[S.area]).map(x=>`<span class="chip">${x.p.i} ${x.p.n} · ${x.p.r} · ${x.pct.toFixed(1)}%</span>`).join("")}</div></div>`;
+    <div class="card"><h2>${EGGS[S.area].n} odds</h2><div class="row" style="margin-bottom:8px"><button style="flex:1" class="${oddsGold?"s":""}" onclick="oddsGold=false;render()">Normal</button><button style="flex:1" class="${oddsGold?"":"s"}" onclick="oddsGold=true;render()">✨ Golden</button></div><p>Tap a pet to auto-delete it when it drops (🗑️).</p><div class="grid">${eggPets(EGGS[S.area]).map(x=>`<span class="chip" style="cursor:pointer;${(oddsGold?S.delg:S.del)[x.p.id]?"opacity:.5;text-decoration:line-through":""}" onclick="togDel('${x.p.id}')">${(oddsGold?S.delg:S.del)[x.p.id]?"🗑️ ":""}${x.p.i} ${oddsGold?"Golden ":""}${x.p.n} · ${x.p.r} · ${fp(x.pct*(oddsGold?goldChance():1-goldChance()))}%</span>`).join("")}</div></div>`;
   },
   news(){
     return [...UPDATES].reverse().map(u=>`<div class="card"><h2><span class="ver">v${u.v}</span> ${u.t}</h2>${u.n.map(x=>`<p>• ${x}</p>`).join("")}</div>`).join("")
