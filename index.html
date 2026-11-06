@@ -93,6 +93,7 @@ input{border:3px solid #1d2b4f;background:#fff;color:#1d2b4f}
 const KEY = "mineTycoonSave_v1";
 const UPDATES = [
   { v: "1.0.0", t: "Grand Opening", n: ["3 mining zones with 9 ores", "6 upgrades, each with a level cap", "Auto Sell with ON/OFF switch", "Pets: hatch up to 12, equip 3", "Auto-save"] },
+  { v: "1.1.0", t: "The Frozen Update", n: ["New zone: Frozen Tundra with 3 new ores (unlock for 400K)", "New upgrade: Critical Strike (8 levels, x3 ore clicks)", "New upgrade: Pet Slots (3 levels, equip up to 6 pets)", "Every zone has its own egg with its own pets, and you can only hatch the egg of the zone you are in (Stone, Crystal, Magma, Frost)", "12 new pets, including the Legendary Cosmic Whale", "Daily Gift: claim free coins every 24 hours", "Auto Miner now has an ON/OFF switch", "Releasing Common or Rare pets no longer asks for confirmation (Epic and Legendary still do)"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -101,7 +102,8 @@ const VERSION = UPDATES[UPDATES.length - 1].v;
 const AREAS = [
   { name: "Stone Quarry", icon: "⛰️", cost: 0, ores: [["Stone","🪨",1,60],["Coal","⚫",3,30],["Copper","🟠",8,10]] },
   { name: "Crystal Cave", icon: "💎", cost: 3000, ores: [["Iron","🔩",14,55],["Silver","⚪",30,30],["Gold","🟡",70,15]] },
-  { name: "Magma Core",  icon: "🌋", cost: 40000, ores: [["Ruby","🔴",150,55],["Sapphire","🔵",350,33],["Diamond","💠",900,12]] }
+  { name: "Magma Core",  icon: "🌋", cost: 40000, ores: [["Ruby","🔴",150,55],["Sapphire","🔵",350,33],["Diamond","💠",900,12]] },
+  { name: "Frozen Tundra", icon: "❄️", cost: 400000, ores: [["Frostite","🧊",1100,55],["Moonstone","🌙",2600,33],["Starlight","🌟",7000,12]] }
 ];
 // max = level cap, cost = base * grow^level
 const UPGRADES = [
@@ -110,10 +112,32 @@ const UPGRADES = [
   { id:"auto",  name:"Auto Miner",       icon:"🤖", max:10, base:150, grow:1.7,  desc:"Ores mined every second", val:l=>0.4*l,          show:l=>(0.4*l).toFixed(1)+" ores/s" },
   { id:"value", name:"Ore Polisher",     icon:"✨", max:10, base:100, grow:1.75, desc:"Bonus coins when selling",val:l=>1+0.1*l,        show:l=>"+"+(l*10)+"% coins" },
   { id:"luck",  name:"Lucky Charm",      icon:"🍀", max:8,  base:300, grow:1.8,  desc:"Better chance of rare ores", val:l=>l,           show:l=>"Luck "+l+"/8" },
-  { id:"autosell", name:"Auto Sell", icon:"💰", max:5, base:500, grow:2.2, desc:"Sells a full backpack for you", val:l=>l?0.5+0.1*l:0, show:l=>l?"Sells at "+Math.round((0.5+0.1*l)*100)+"% value":"Off" }
+  { id:"autosell", name:"Auto Sell", icon:"💰", max:5, base:500, grow:2.2, desc:"Sells a full backpack for you", val:l=>l?0.5+0.1*l:0, show:l=>l?"Sells at "+Math.round((0.5+0.1*l)*100)+"% value":"Off" },
+  { id:"crit", name:"Critical Strike", icon:"💥", max:8, base:400, grow:1.75, desc:"Chance for a x3 ore click", val:l=>l*4, show:l=>(l*4)+"% crit chance" },
+  { id:"slots", name:"Pet Slots", icon:"🐾", max:3, base:5000, grow:4, desc:"Pets you can equip", val:l=>3+l, show:l=>(3+l)+" pets" }
 ];
-const MAX_PETS = 12, MAX_EQUIP = 3, EGG_COST = 1500;
+const MAX_PETS = 12;
+const maxEq = () => 3+lvl("slots");
+const EGGS = [ // index = zone index. pool = { petId: weight }. Each zone has its own egg with its own pets
+  { n:"Stone Egg",   i:"🥚", cost:1500,    pool:{cat:35,mole:25,fox:15,owl:12,dragon:6,phoenix:2} },
+  { n:"Crystal Egg", i:"🔮", cost:12000,   pool:{bat:45,lizard:30,golem:20,stag:5} },
+  { n:"Magma Egg",   i:"🌋", cost:120000,  pool:{crab:35,gator:30,bull:25,drake:10} },
+  { n:"Frost Egg",   i:"🧊", cost:1200000, pool:{bunny:30,wolf:35,mammoth:25,whale:10} }
+];
+const eggPets = g => { const T=Object.values(g.pool).reduce((a,b)=>a+b,0); return Object.entries(g.pool).map(([id,w])=>({p:PETS.find(x=>x.id===id),pct:w/T*100})); };
 const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
+  { id:"bat", n:"Gem Bat", i:"🦇", r:"Common", m:.10 },
+  { id:"lizard", n:"Crystal Lizard", i:"🦎", r:"Rare", m:.25 },
+  { id:"golem", n:"Crystal Golem", i:"🗿", r:"Epic", m:.55 },
+  { id:"stag", n:"Prism Stag", i:"🦌", r:"Legendary", m:1.0 },
+  { id:"crab", n:"Lava Crab", i:"🦀", r:"Rare", m:.30 },
+  { id:"gator", n:"Magma Gator", i:"🐊", r:"Rare", m:.35 },
+  { id:"bull", n:"Ember Bull", i:"🐂", r:"Epic", m:.75 },
+  { id:"drake", n:"Inferno Drake", i:"🐉", r:"Legendary", m:1.4 },
+  { id:"bunny", n:"Ice Bunny", i:"🐰", r:"Rare", m:.55 },
+  { id:"wolf", n:"Frost Wolf", i:"🐺", r:"Epic", m:1.0 },
+  { id:"mammoth", n:"Snow Mammoth", i:"🦣", r:"Epic", m:1.2 },
+  { id:"whale", n:"Cosmic Whale", i:"🐋", r:"Legendary", m:1.8 },
   { id:"cat",  n:"Cave Cat",   i:"🐱", r:"Common",    m:.05, w:35 },
   { id:"mole", n:"Mole",       i:"🦔", r:"Common",    m:.06, w:25 },
   { id:"fox",  n:"Ember Fox",  i:"🦊", r:"Rare",      m:.15, w:15 },
@@ -123,7 +147,7 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
 ];
 
 /* ===================== STATE ===================== */
-const DEF = { as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
+const DEF = { gift:0, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
 let S = load(), view = "mine", acc = 0;
 function load(){ try{ const r = JSON.parse(localStorage.getItem(KEY)); if(r) return Object.assign(structuredClone(DEF), r); }catch(e){} return structuredClone(DEF); }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -157,12 +181,19 @@ function mine(n, silent){
   return got;
 }
 function clickRock(e){
-  const got = mine(U("power").val(lvl("power")));
+  const crit = Math.random()*100 < U("crit").val(lvl("crit"));
+  const got = mine(U("power").val(lvl("power"))*(crit?3:1));
   const r = $("#rock"); r.classList.remove("hit"); void r.offsetWidth; r.classList.add("hit");
-  if(got){ float("+"+got, e.clientX, e.clientY); }
+  if(got){ float((crit?"💥 CRIT! +":"+")+got, e.clientX, e.clientY); }
   live();
 }
 function sellValue(){ return Math.floor(Object.entries(S.bag).reduce((a,[k,c])=>a+ORE[k][2]*c,0)*coinMult()); }
+function tog(id){ const k=id==="auto"?"am":"as"; S[k]=!S[k]; save(); render(); }
+function claimGift(){
+  if(Date.now()-S.gift<864e5) return;
+  const v = Math.round(500*Math.pow(4,S.area)); S.coins += v; S.gift = Date.now();
+  toast("Daily gift: +🪙"+fmt(v), true); save(); render();
+}
 function autoSell(){ const l=lvl("autosell"); if(!l||!S.as) return false; const v=Math.floor(sellValue()*U("autosell").val(l)); S.coins+=v; S.bag={}; float("+🪙"+fmt(v)+" auto",innerWidth/2,120); return true; }
 function sell(){
   const v = sellValue(); if(!v) return toast("Nothing to sell");
@@ -181,20 +212,21 @@ function zone(i){
   }
   S.area = i; save(); render();
 }
-function hatch(){
-  if(S.coins<EGG_COST || S.pets.length>=MAX_PETS) return;
-  S.coins -= EGG_COST;
-  let r = Math.random()*PETS.reduce((a,p)=>a+p.w,0), pick = PETS[0];
-  for(const p of PETS){ if((r-=p.w)<=0){ pick = p; break; } }
+function hatch(k){
+  const g=EGGS[k];
+  if(k!==S.area || S.coins<g.cost || S.pets.length>=MAX_PETS) return;
+  S.coins -= g.cost;
+  let r = Math.random()*100, pick = eggPets(g)[0].p;
+  for(const x of eggPets(g)){ if((r-=x.pct)<=0){ pick = x.p; break; } }
   S.pets.push({id:pick.id,on:false});
   toast("You hatched "+pick.i+" "+pick.n+" ("+pick.r+")!", true); save(); render();
 }
 function togglePet(i){
   const p = S.pets[i];
-  if(!p.on && S.pets.filter(x=>x.on).length>=MAX_EQUIP) return toast("Only "+MAX_EQUIP+" pets can be equipped");
+  if(!p.on && S.pets.filter(x=>x.on).length>=maxEq()) return toast("Only "+maxEq()+" pets can be equipped");
   p.on = !p.on; save(); render();
 }
-function release(i,e){ e.stopPropagation(); if(confirm("Release this pet forever?")){ S.pets.splice(i,1); save(); render(); } }
+function release(i,e){ e.stopPropagation(); const d=PETS.find(x=>x.id===S.pets[i].id); if(d.r==="Common"||d.r==="Rare"||confirm("Release this "+d.r+" pet forever?")){ S.pets.splice(i,1); save(); render(); } }
 function resetGame(){ if(confirm("Delete ALL progress?")){ S = structuredClone(DEF); save(); render(); } }
 
 /* ===================== UI ===================== */
@@ -206,6 +238,7 @@ const VIEWS = {
     const a = AREAS[S.area];
     return `<div class="zones">${AREAS.map((z,i)=>`<button class="${i===S.area?"on ":""}${S.unlocked.includes(i)?"s":""}" onclick="zone(${i})">${z.icon} ${z.name}${S.unlocked.includes(i)?"":"<br>🔒 🪙"+fmt(z.cost)}</button>`).join("")}</div>
     <div id="rockWrap"><button id="rock" onclick="clickRock(event)">${a.icon}</button></div>
+    <div class="card row"><div style="flex:1"><h2>🎁 Daily Gift</h2><p>Free coins every 24 hours. Better zone = bigger gift!</p></div>${Date.now()-S.gift>=864e5?`<button class="g" onclick="claimGift()">Claim</button>`:`<button disabled>${Math.ceil((864e5-(Date.now()-S.gift))/36e5)}h left</button>`}</div>
     <div class="card"><h2>Ores here</h2><div class="grid">${a.ores.map(o=>`<span class="chip">${o[1]} ${o[0]} · 🪙${o[2]}</span>`).join("")}</div></div>
     <div class="card"><h2>Backpack</h2><div class="grid" id="bagList"></div><p></p><button class="g" id="sellBtn" onclick="sell()"></button></div>`;
   },
@@ -215,16 +248,15 @@ const VIEWS = {
       return `<div class="card up"><div class="ic">${u.icon}</div><div class="mid"><b>${u.name}</b> <span class="chip">Lv ${l}/${u.max}</span>
       <p>${u.desc}: <b>${u.show(l)}</b>${maxed?"":" → "+u.show(l+1)}</p>
       <div class="pips">${Array.from({length:u.max},(_,i)=>`<b class="${i<l?"f":""}"></b>`).join("")}</div></div>
-      <div style="display:grid;gap:6px">${u.id==="autosell"&&l?`<button class="s" onclick="S.as=!S.as;save();render()">${S.as?"ON":"OFF"}</button>`:""}<button ${maxed||S.coins<c?"disabled":""} onclick="buyUp('${u.id}')">${maxed?"MAX":"🪙 "+fmt(c)}</button></div></div>`;
+      <div style="display:grid;gap:6px">${(u.id==="autosell"||u.id==="auto")&&l?`<button class="s" onclick="tog('${u.id}')">${S[u.id==="auto"?"am":"as"]?"ON":"OFF"}</button>`:""}<button ${maxed||S.coins<c?"disabled":""} onclick="buyUp('${u.id}')">${maxed?"MAX":"🪙 "+fmt(c)}</button></div></div>`;
     }).join("");
   },
   pets(){
     const eq = S.pets.filter(p=>p.on).length;
-    return `<div class="card"><h2>🥚 Pet Egg</h2><p>Hatch pets that boost your coins. Storage ${S.pets.length}/${MAX_PETS} · Equipped ${eq}/${MAX_EQUIP} · Bonus +${Math.round(petMult()*100)}%</p>
-    <button ${S.coins<EGG_COST||S.pets.length>=MAX_PETS?"disabled":""} onclick="hatch()">${S.pets.length>=MAX_PETS?"Storage full":"Hatch · 🪙 "+fmt(EGG_COST)}</button></div>
+    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${MAX_PETS} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=MAX_PETS?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button></div>`})()}</div>
     <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${d.n}<br>+${Math.round(d.m*100)}% · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
     <p>Tap a pet to equip or unequip it.</p></div>
-    <div class="card"><p>Odds: ${PETS.map(p=>p.i+" "+p.r).join(" · ")}</p></div>`;
+    <div class="card"><h2>${EGGS[S.area].n} odds</h2><div class="grid">${eggPets(EGGS[S.area]).map(x=>`<span class="chip">${x.p.i} ${x.p.n} · ${x.p.r} · ${x.pct.toFixed(1)}%</span>`).join("")}</div></div>`;
   },
   news(){
     return [...UPDATES].reverse().map(u=>`<div class="card"><h2><span class="ver">v${u.v}</span> ${u.t}</h2>${u.n.map(x=>`<p>• ${x}</p>`).join("")}</div>`).join("")
@@ -252,7 +284,7 @@ function live(){
 /* ===================== LOOP ===================== */
 setInterval(()=>{
   const r = U("auto").val(lvl("auto"));
-  if(r>0){ acc += r*0.1; while(acc>=1){ acc--; if(!mine(1,true)){ acc=0; break; } } live(); }
+  if(r>0 && S.am){ acc += r*0.1; while(acc>=1){ acc--; if(!mine(1,true)){ acc=0; break; } } live(); }
 },100);
 setInterval(()=>{ if(view==="up"||view==="pets") render(); save(); },1000);
 render();
