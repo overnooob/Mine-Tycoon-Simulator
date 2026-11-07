@@ -100,6 +100,7 @@ const UPDATES = [
   { v: "1.1.5", t: "Golden Mini Update", n: ["Auto-delete: tap a pet in the odds list (Normal or Golden tab) to delete it automatically when it drops", "New Secret pet: Void Serpent in the Frost Egg (0.1% chance)", "Golden pets: merge 5 identical pets into 1 Golden pet with double bonus", "1% base chance to hatch a Golden pet from any egg", "Odds list can switch between Normal and Golden", "New upgrade: More Storage (5 levels, up to 27 pet slots)", "New upgrade: Golden Luck (6 levels, up to 4% golden chance)"] },
   { v: "1.2.0", t: "The Sky Update", n: ["New zone: Sky Citadel with 3 new ores (unlock for 6M)", "New Sky Egg with 6 new pets, including the Secret Celestial Peacock (0.1%) and the Divine Archangel Lion (0.01%)", "New upgrade: Double Drop (8 levels, ores can drop twice)", "New upgrade: Multi Hatch (2 levels, hatch x3 and then x5)", "Multi Hatch shows every pet you hatched in one list", "Sound effects and music, with a mute button in the top left corner"] },
   { v: "1.3.0", t: "The Exclusive Update", n: ["New rarity: Exclusive", "New pet: Rock (Exclusive) with a 0.001% chance from every egg. It is as strong as your best pet (100%, Golden Rock: 110%). It cannot drop from the Playtime Egg", "New ⏳ Playtime Egg above the Eggs: free, open it every 10 minutes. Only Exclusive pets: Clock Mouse (97%, 75% of your best pet, Golden 85%) and Chrono Turtle (3%, 100% of your best pet, Golden 110%)", "Exclusive pets cannot be used in Golden Merge","Removed the Daily Gift"] },
+  { v: "1.4.0", t: "The Farm Update", n: ["New zone: Harvest Valley with 3 new ores (unlock for 80M)", "New Farm Egg with 6 new pets: 1 Rare, 1 Epic, 1 Legendary, 2 Secret (Pumpkin King 0.1%, Sunflower Sprite 0.05%) and 1 Divine (Harvest Stallion 0.005%)", "New 🌱 Farm tab (left of Mine, only visible in Harvest Valley): grow Apple, Banana, Carrot, Strawberry, Tomato, Corn and Grapes. Crops cost coins and take 15 minutes to grow", "Farm upgrades: Fertilizer (faster growing), Bigger Harvest (more crops per harvest) and More Plots", "Use crops from your farm inventory for 5 minute boosts (using more adds more time): Apple +25% coins, Banana +50% pickaxe power, Carrot +25% luck, Strawberry +2% golden chance, Tomato +10% bonus coins when selling, Corn +10% double drop, Grapes +25% pet bonus", "New Exclusive pet in the Playtime Egg: Time Wizard (0.1%, 120% of your best pet, Golden 130%)", "Rock can no longer be found in eggs (you keep the ones you already have)"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -110,7 +111,8 @@ const AREAS = [
   { name: "Crystal Cave", icon: "💎", cost: 3000, ores: [["Iron","🔩",14,55],["Silver","⚪",30,30],["Gold","🟡",70,15]] },
   { name: "Magma Core",  icon: "🌋", cost: 40000, ores: [["Ruby","🔴",150,55],["Sapphire","🔵",350,33],["Diamond","💠",900,12]] },
   { name: "Frozen Tundra", icon: "❄️", cost: 400000, ores: [["Frostite","🧊",1100,55],["Moonstone","🌙",2600,33],["Starlight","🌟",7000,12]] },
-  { name: "Sky Citadel", icon: "☁️", cost: 6000000, ores: [["Cloudstone","⛅",11000,55],["Skyglass","🔷",26000,33],["Aether","💫",70000,12]] }
+  { name: "Sky Citadel", icon: "☁️", cost: 6000000, ores: [["Cloudstone","⛅",11000,55],["Skyglass","🔷",26000,33],["Aether","💫",70000,12]] },
+  { name: "Harvest Valley", icon: "🌾", cost: 80000000, farm: true, ores: [["Clay","🟤",110000,55],["Amber","🟧",260000,33],["Emerald","💚",700000,12]] }
 ];
 // max = level cap, cost = base * grow^level
 const UPGRADES = [
@@ -127,7 +129,27 @@ const UPGRADES = [
   { id:"dbl", name:"Double Drop", icon:"🎲", max:8, base:1000, grow:1.8, desc:"Chance for an ore to drop twice", val:l=>l*5, show:l=>(l*5)+"% double drop" },
   { id:"multi", name:"Multi Hatch", icon:"🐣", max:2, base:60000, grow:5, desc:"Hatch several eggs at once", val:l=>[1,3,5][l], show:l=>"Hatch x"+[1,3,5][l] }
 ];
-const goldChance = () => 0.01+0.005*lvl("goldluck");
+const CROPS = [ // 5 minute boost per crop used
+  { id:"apple", n:"Apple", i:"🍎", cost:500000, desc:"+25% coins" },
+  { id:"banana", n:"Banana", i:"🍌", cost:600000, desc:"+50% stronger pickaxe" },
+  { id:"carrot", n:"Carrot", i:"🥕", cost:400000, desc:"+25% luck" },
+  { id:"strawberry", n:"Strawberry", i:"🍓", cost:2000000, desc:"+2% golden chance" },
+  { id:"tomato", n:"Tomato", i:"🍅", cost:800000, desc:"+10% bonus coins when selling" },
+  { id:"corn", n:"Corn", i:"🌽", cost:1000000, desc:"+10% double drop" },
+  { id:"grapes", n:"Grapes", i:"🍇", cost:3000000, desc:"+25% pet bonus" }
+];
+const BOOST_MS = 5*60*1000;
+const FARM_UPS = [
+  { id:"fert", name:"Fertilizer", icon:"🧪", max:5, base:2000000, grow:2.6, desc:"Crop growing time", show:l=>parseFloat((15*(1-0.1*l)).toFixed(1))+" min" },
+  { id:"yield", name:"Bigger Harvest", icon:"🧺", max:4, base:3000000, grow:3, desc:"Crops per harvest", show:l=>(1+l)+" per harvest" },
+  { id:"plots", name:"More Plots", icon:"🟫", max:3, base:5000000, grow:4, desc:"Farm plots", show:l=>(3+l)+" plots" }
+];
+const buffOn = id => ((S.buffs||{})[id]||0) > Date.now();
+const plotCount = () => 3+lvl("plots");
+const growMs = () => 15*60*1000*(1-0.1*lvl("fert"));
+const yieldN = () => 1+lvl("yield");
+const dblChance = () => U("dbl").val(lvl("dbl")) + (buffOn("corn")?10:0);
+const goldChance = () => 0.01+0.005*lvl("goldluck") + (buffOn("strawberry")?0.02:0);
 const maxPets = () => 12+3*lvl("storage");
 const maxEq = () => 3+lvl("slots");
 const EGGS = [ // index = zone index. pool = { petId: weight }. Each zone has its own egg with its own pets
@@ -135,13 +157,13 @@ const EGGS = [ // index = zone index. pool = { petId: weight }. Each zone has it
   { n:"Crystal Egg", i:"🔮", cost:12000,   pool:{bat:45,lizard:30,golem:20,stag:5} },
   { n:"Magma Egg",   i:"🌋", cost:120000,  pool:{crab:35,gator:30,bull:25,drake:10} },
   { n:"Frost Egg",   i:"🧊", cost:1200000, pool:{bunny:30,wolf:35,mammoth:25,whale:9.9,void:.1} },
-  { n:"Sky Egg",     i:"🌈", cost:12000000, pool:{sheep:30,eagle:35,unicorn:25,leviathan:9.89,peacock:.1,divine:.01} }
+  { n:"Sky Egg",     i:"🌈", cost:12000000, pool:{sheep:30,eagle:35,unicorn:25,leviathan:9.89,peacock:.1,divine:.01} },
+  { n:"Farm Egg",    i:"🌾", cost:120000000, pool:{hen:60,cow:30,rooster:9.845,pumpking:.1,sunsprite:.05,stallion:.005} }
 ];
 let oddsGold = false;
 const fp = n => n<.01 ? String(parseFloat(n.toFixed(7))) : n<1 ? n.toFixed(2) : n.toFixed(1);
-const ROCK_PCT = 0.001; // % chance of the Exclusive Rock from every egg
-const eggPets = (g,noRock) => { const T=Object.values(g.pool).reduce((a,b)=>a+b,0); return Object.entries(g.pool).map(([id,w])=>({p:PETS.find(x=>x.id===id),pct:w/T*(noRock?100:100-ROCK_PCT)})).concat(noRock?[]:[{p:PETS.find(x=>x.id==="rock"),pct:ROCK_PCT}]); };
-const PTEGG = { n:"Playtime Egg", i:"⏳", pool:{clockmouse:97,turtle:3}, wait:10*60*1000 };
+const eggPets = g => { const T=Object.values(g.pool).reduce((a,b)=>a+b,0); return Object.entries(g.pool).map(([id,w])=>({p:PETS.find(x=>x.id===id),pct:w/T*100})); };
+const PTEGG = { n:"Playtime Egg", i:"⏳", pool:{clockmouse:96.9,turtle:3,wizard:.1}, wait:10*60*1000 };
 const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
   { id:"bat", n:"Gem Bat", i:"🦇", r:"Common", m:.10 },
   { id:"lizard", n:"Crystal Lizard", i:"🦎", r:"Rare", m:.25 },
@@ -162,6 +184,13 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
   { id:"leviathan", n:"Sky Leviathan", i:"🐳", r:"Legendary", m:2.6 },
   { id:"peacock", n:"Celestial Peacock", i:"🦚", r:"Secret", m:6.0 },
   { id:"divine", n:"Archangel Lion", i:"🦁", r:"Divine", m:12.0 },
+  { id:"hen", n:"Hay Hen", i:"🐔", r:"Rare", m:1.2 },
+  { id:"cow", n:"Harvest Cow", i:"🐄", r:"Epic", m:2.4 },
+  { id:"rooster", n:"Sunrise Rooster", i:"🐓", r:"Legendary", m:4.0 },
+  { id:"pumpking", n:"Pumpkin King", i:"🎃", r:"Secret", m:9.0 },
+  { id:"sunsprite", n:"Sunflower Sprite", i:"🌻", r:"Secret", m:14.0 },
+  { id:"stallion", n:"Harvest Stallion", i:"🐎", r:"Divine", m:24.0 },
+  { id:"wizard", n:"Time Wizard", i:"🧙", r:"Exclusive", f:1.2, fg:1.3 },
   { id:"rock", n:"Rock", i:"🪨", r:"Exclusive", f:1.0, fg:1.1 },
   { id:"clockmouse", n:"Clock Mouse", i:"🐭", r:"Exclusive", f:.75, fg:.85 },
   { id:"turtle", n:"Chrono Turtle", i:"🐢", r:"Exclusive", f:1.0, fg:1.1 },
@@ -174,7 +203,7 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
 ];
 
 /* ===================== STATE ===================== */
-const DEF = { mute:false, del:{}, delg:{}, pt:0, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
+const DEF = { mute:false, del:{}, delg:{}, pt:0, plots:[], inv:{}, buffs:{}, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
 let S = load(), view = "mine", acc = 0;
 function load(){ try{ const r = JSON.parse(localStorage.getItem(KEY)); if(r) return Object.assign(structuredClone(DEF), r); }catch(e){} return structuredClone(DEF); }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -182,20 +211,20 @@ function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} 
 const $ = s => document.querySelector(s);
 const fmt = n => n>=1e9?(n/1e9).toFixed(2)+"B":n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e4?(n/1e3).toFixed(1)+"K":Math.floor(n).toLocaleString("en-US");
 const lvl = id => S.up[id]||0;
-const U = id => UPGRADES.find(u=>u.id===id);
+const U = id => UPGRADES.find(u=>u.id===id) || FARM_UPS.find(u=>u.id===id);
 const cap = () => U("bag").val(lvl("bag"));
 const bagCount = () => Object.values(S.bag).reduce((a,b)=>a+b,0);
 const ORE = {}; AREAS.forEach(a=>a.ores.forEach(o=>ORE[o[0]]=o));
 // Exclusive pets (f/fg) are "x as strong as your best normal pet"; best = highest bonus among the pets you own
 const bestPet = () => S.pets.reduce((b,p)=>{ const d=PETS.find(x=>x.id===p.id); return d.f ? b : Math.max(b, d.m*(p.g?2:1)); },0);
 const petVal = p => { const d=PETS.find(x=>x.id===p.id); return d.f ? bestPet()*(p.g?d.fg:d.f) : d.m*(p.g?2:1); };
-const petMult = () => S.pets.filter(p=>p.on).reduce((a,p)=>a+petVal(p),0);
-const coinMult = () => U("value").val(lvl("value")) * (1+petMult());
+const petMult = () => S.pets.filter(p=>p.on).reduce((a,p)=>a+petVal(p),0) * (buffOn("grapes")?1.25:1);
+const coinMult = () => U("value").val(lvl("value")) * (1+petMult()) * (buffOn("apple")?1.25:1) * (buffOn("tomato")?1.1:1);
 const upCost = u => Math.round(u.base*Math.pow(u.grow,lvl(u.id)));
 
 /* ===================== ACTIONS ===================== */
 function pickOre(a){
-  const L = lvl("luck");
+  const L = lvl("luck") + (buffOn("carrot")?2:0); // Carrot = +25% of the max luck (8 levels) = +2 levels
   const ws = a.ores.map((o,i)=>o[3]*(1+L*0.25*i));
   let r = Math.random()*ws.reduce((x,y)=>x+y,0);
   for(let i=0;i<ws.length;i++){ if((r-=ws[i])<=0) return a.ores[i]; }
@@ -207,13 +236,14 @@ function mine(n, silent){
     if(bagCount()>=cap()){ if(!autoSell()){ if(!silent) toast("Backpack full! Sell your ores"); break; } }
     const o = pickOre(AREAS[S.area]);
     S.bag[o[0]] = (S.bag[o[0]]||0)+1; S.mined++; got++;
-    if(bagCount()<cap() && Math.random()*100<U("dbl").val(lvl("dbl"))){ S.bag[o[0]]++; got++; }
+    if(bagCount()<cap() && Math.random()*100<dblChance()){ S.bag[o[0]]++; got++; }
   }
   return got;
 }
 function clickRock(e){
   const crit = Math.random()*100 < U("crit").val(lvl("crit"));
-  const got = mine(U("power").val(lvl("power"))*(crit?3:1));
+  const base = U("power").val(lvl("power"))*(buffOn("banana")?1.5:1), pw = Math.floor(base)+(Math.random()<base%1?1:0);
+  const got = mine(pw*(crit?3:1));
   const r = $("#rock"); r.classList.remove("hit"); void r.offsetWidth; r.classList.add("hit");
   if(got){ sfx(crit?"crit":"mine"); float((crit?"💥 CRIT! +":"+")+got, e.clientX, e.clientY); }
   live();
@@ -237,13 +267,28 @@ function merge(id){
 function tog(id){ const k=id==="auto"?"am":"as"; S[k]=!S[k]; save(); render(); }
 function openPlaytime(){
   if(Date.now()-S.pt<PTEGG.wait || S.pets.length>=maxPets()) return;
-  const L=eggPets(PTEGG,true); let r=Math.random()*100, pick=L[0].p;
+  const L=eggPets(PTEGG); let r=Math.random()*100, pick=L[0].p;
   for(const x of L){ if((r-=x.pct)<=0){ pick=x.p; break; } }
   const gold = Math.random() < goldChance();
   S.pt = Date.now();
   if((gold?S.delg:S.del)[pick.id]){ toast("🗑️ Auto-deleted "+(gold?"✨ Golden ":"")+pick.i+" "+pick.n); save(); render(); return; }
   S.pets.push({id:pick.id,on:false,g:gold});
   toast("You hatched "+(gold?"✨ Golden ":"")+pick.i+" "+pick.n+" ("+pick.r+")!", true); save(); render();
+}
+function plant(i,id){
+  const c=CROPS.find(x=>x.id===id); if(S.plots[i]||S.coins<c.cost) return;
+  S.coins-=c.cost; S.plots[i]={c:id,t:Date.now()+growMs()}; sfx("buy"); save(); render();
+}
+function harvest(i,quiet){
+  const p=S.plots[i]; if(!p||p.t>Date.now()) return;
+  S.inv[p.c]=(S.inv[p.c]||0)+yieldN(); S.plots[i]=null;
+  if(!quiet){ sfx("coin"); save(); render(); }
+}
+function harvestAll(){ for(let i=0;i<plotCount();i++) harvest(i,true); sfx("coin"); save(); render(); }
+function useCrop(id){
+  if(!(S.inv[id]>0)) return;
+  S.inv[id]--; S.buffs[id]=Math.max(Date.now(),S.buffs[id]||0)+BOOST_MS;
+  sfx("magic"); save(); render();
 }
 function autoSell(){ const l=lvl("autosell"); if(!l||!S.as) return false; const v=Math.floor(sellValue()*U("autosell").val(l)); S.coins+=v; S.bag={}; float("+🪙"+fmt(v)+" auto",innerWidth/2,120); return true; }
 function sell(){
@@ -288,6 +333,13 @@ function resetGame(){ if(confirm("Delete ALL progress?")){ S = structuredClone(D
 let tt; function toast(t, good){ const e=$("#toast"); e.textContent=t; e.style.background=good?"var(--good)":"var(--bad)"; e.style.opacity=1; clearTimeout(tt); tt=setTimeout(()=>e.style.opacity=0,Math.max(1400,t.length*45)); }
 function float(t,x,y){ const e=document.createElement("div"); e.className="fl"; e.textContent=t; e.style.left=(x-14)+"px"; e.style.top=(y-20)+"px"; document.body.appendChild(e); setTimeout(()=>e.remove(),800); }
 
+function upCard(u){
+      const l = lvl(u.id), maxed = l>=u.max, c = upCost(u);
+      return `<div class="card up"><div class="ic">${u.icon}</div><div class="mid"><b>${u.name}</b> <span class="chip">Lv ${l}/${u.max}</span>
+      <p>${u.desc}: <b>${u.show(l)}</b>${maxed?"":" → "+u.show(l+1)}</p>
+      <div class="pips">${Array.from({length:u.max},(_,i)=>`<b class="${i<l?"f":""}"></b>`).join("")}</div></div>
+      <div style="display:grid;gap:6px">${(u.id==="autosell"||u.id==="auto")&&l?`<button class="s" onclick="tog('${u.id}')">${S[u.id==="auto"?"am":"as"]?"ON":"OFF"}</button>`:""}<button ${maxed||S.coins<c?"disabled":""} onclick="buyUp('${u.id}')">${maxed?"MAX":"🪙 "+fmt(c)}</button></div></div>`;
+    }
 const VIEWS = {
   mine(){
     const a = AREAS[S.area];
@@ -296,35 +348,40 @@ const VIEWS = {
     <div class="card"><h2>Ores here</h2><div class="grid">${a.ores.map(o=>`<span class="chip">${o[1]} ${o[0]} · 🪙${o[2]}</span>`).join("")}</div></div>
     <div class="card"><h2>Backpack</h2><div class="grid" id="bagList"></div><p></p><button class="g" id="sellBtn" onclick="sell()"></button></div>`;
   },
-  up(){
-    return UPGRADES.map(u=>{
-      const l = lvl(u.id), maxed = l>=u.max, c = upCost(u);
-      return `<div class="card up"><div class="ic">${u.icon}</div><div class="mid"><b>${u.name}</b> <span class="chip">Lv ${l}/${u.max}</span>
-      <p>${u.desc}: <b>${u.show(l)}</b>${maxed?"":" → "+u.show(l+1)}</p>
-      <div class="pips">${Array.from({length:u.max},(_,i)=>`<b class="${i<l?"f":""}"></b>`).join("")}</div></div>
-      <div style="display:grid;gap:6px">${(u.id==="autosell"||u.id==="auto")&&l?`<button class="s" onclick="tog('${u.id}')">${S[u.id==="auto"?"am":"as"]?"ON":"OFF"}</button>`:""}<button ${maxed||S.coins<c?"disabled":""} onclick="buyUp('${u.id}')">${maxed?"MAX":"🪙 "+fmt(c)}</button></div></div>`;
-    }).join("");
-  },
+  up(){ return UPGRADES.map(upCard).join(""); },
   pets(){
     const eq = S.pets.filter(p=>p.on).length;
     const left = Math.max(0, PTEGG.wait-(Date.now()-S.pt)), full = S.pets.length>=maxPets(), mm = Math.floor(left/60000), ss = String(Math.floor(left%60000/1000)).padStart(2,"0");
-    return `<div class="card"><h2>⏳ Playtime Egg</h2><div class="up" style="margin-top:10px"><div class="ic">${PTEGG.i}</div><div class="mid"><b>${PTEGG.n}</b><p>Free every 10 minutes. Only Exclusive pets!</p></div><button class="${left||full?"":"g"}" ${left||full?"disabled":""} onclick="openPlaytime()">${left?mm+":"+ss:full?"Storage full":"Open"}</button></div>
-    </div>
-    <div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button>${lvl("multi")?`<button class="g" ${S.coins<g.cost*[1,3,5][lvl("multi")]||S.pets.length+[1,3,5][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5][lvl("multi")]})">x${[1,3,5][lvl("multi")]}</button>`:""}</div>`})()}</div>
+    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button>${lvl("multi")?`<button class="g" ${S.coins<g.cost*[1,3,5][lvl("multi")]||S.pets.length+[1,3,5][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5][lvl("multi")]})">x${[1,3,5][lvl("multi")]}</button>`:""}</div>`})()}<div class="up" style="margin-top:14px;padding-top:10px;border-top:2px dashed rgba(128,128,128,.4)"><div class="ic">${PTEGG.i}</div><div class="mid"><b>${PTEGG.n}</b><p>Free every 10 minutes. Only Exclusive pets!</p></div><button class="${left||full?"":"g"}" ${left||full?"disabled":""} onclick="openPlaytime()">${left?mm+":"+ss:full?"Storage full":"Open"}</button></div></div>
     <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><div class="grid">${mergeInfo()}</div></div>
     <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""} ${p.g?"gold":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${p.g?"Golden ":""}${d.n}<br>${d.f?Math.round((p.g?d.fg:d.f)*100)+"% of best (+":"+"}${Math.round(petVal(p)*100)}%${d.f?")":""} · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
     <p>Tap a pet to equip or unequip it.</p></div>
     <div class="card"><h2>${EGGS[S.area].n} odds</h2><div class="row" style="margin-bottom:8px"><button style="flex:1" class="${oddsGold?"s":""}" onclick="oddsGold=false;render()">Normal</button><button style="flex:1" class="${oddsGold?"":"s"}" onclick="oddsGold=true;render()">✨ Golden</button></div><p>Tap a pet to auto-delete it when it drops (🗑️).</p><div class="grid">${eggPets(EGGS[S.area]).map(x=>`<span class="chip" style="cursor:pointer;${(oddsGold?S.delg:S.del)[x.p.id]?"opacity:.5;text-decoration:line-through":""}" onclick="togDel('${x.p.id}')">${(oddsGold?S.delg:S.del)[x.p.id]?"🗑️ ":""}${x.p.i} ${oddsGold?"Golden ":""}${x.p.n} · ${x.p.r} · ${fp(x.pct*(oddsGold?goldChance():1-goldChance()))}%</span>`).join("")}</div></div>
-    <div class="card"><h2>⏳ Playtime Egg odds</h2><div class="row" style="margin-bottom:8px"><button style="flex:1" class="${oddsGold?"s":""}" onclick="oddsGold=false;render()">Normal</button><button style="flex:1" class="${oddsGold?"":"s"}" onclick="oddsGold=true;render()">✨ Golden</button></div><p>Tap a pet to auto-delete it when it drops (🗑️).</p><div class="grid">${eggPets(PTEGG,true).map(x=>`<span class="chip" style="cursor:pointer;${(oddsGold?S.delg:S.del)[x.p.id]?"opacity:.5;text-decoration:line-through":""}" onclick="togDel('${x.p.id}')">${(oddsGold?S.delg:S.del)[x.p.id]?"🗑️ ":""}${x.p.i} ${oddsGold?"Golden ":""}${x.p.n} · ${x.p.r} · ${fp(x.pct*(oddsGold?goldChance():1-goldChance()))}%</span>`).join("")}</div></div>`;
+    <div class="card"><h2>⏳ Playtime Egg odds</h2><div class="row" style="margin-bottom:8px"><button style="flex:1" class="${oddsGold?"s":""}" onclick="oddsGold=false;render()">Normal</button><button style="flex:1" class="${oddsGold?"":"s"}" onclick="oddsGold=true;render()">✨ Golden</button></div><p>Tap a pet to auto-delete it when it drops (🗑️).</p><div class="grid">${eggPets(PTEGG).map(x=>`<span class="chip" style="cursor:pointer;${(oddsGold?S.delg:S.del)[x.p.id]?"opacity:.5;text-decoration:line-through":""}" onclick="togDel('${x.p.id}')">${(oddsGold?S.delg:S.del)[x.p.id]?"🗑️ ":""}${x.p.i} ${oddsGold?"Golden ":""}${x.p.n} · ${x.p.r} · ${fp(x.pct*(oddsGold?goldChance():1-goldChance()))}%</span>`).join("")}</div></div>`;
+  },
+  farm(){
+    const now=Date.now(), n=plotCount();
+    const left = t => { const q=Math.max(0,Math.ceil(t/1000)); return Math.floor(q/60)+":"+String(q%60).padStart(2,"0"); };
+    const ready = Array.from({length:n},(_,i)=>S.plots[i]).filter(p=>p&&p.t<=now).length;
+    const boosts = CROPS.filter(c=>buffOn(c.id));
+    return `<div class="card"><h2>⚡ Active boosts</h2><div class="grid">${boosts.length?boosts.map(c=>`<span class="chip">${c.i} ${c.desc} · ${left(S.buffs[c.id]-now)}</span>`).join(""):"<p>No boosts active. Use crops from your inventory!</p>"}</div></div>
+    <div class="card"><h2>🌱 Plots</h2><p>Growing takes ${parseFloat((growMs()/60000).toFixed(1))} min · You get ${yieldN()} per harvest</p>
+    ${Array.from({length:n},(_,i)=>{ const p=S.plots[i]; if(!p) return `<div style="margin:12px 0"><b>Plot ${i+1} · empty</b><div class="grid" style="margin-top:6px">${CROPS.map(c=>`<button class="s" style="padding:6px 8px" ${S.coins<c.cost?"disabled":""} onclick="plant(${i},'${c.id}')">${c.i}<br>🪙${fmt(c.cost)}</button>`).join("")}</div></div>`;
+      const c=CROPS.find(x=>x.id===p.c), rd=p.t<=now;
+      return `<div class="up" style="margin:12px 0"><div class="ic">${c.i}</div><div class="mid"><b>Plot ${i+1} · ${c.n}</b><p>${rd?"Ready to harvest!":"Growing… "+left(p.t-now)}</p></div><button class="${rd?"g":""}" ${rd?"":"disabled"} onclick="harvest(${i})">${rd?"Harvest":"🌱"}</button></div>`; }).join("")}
+    ${ready>1?`<button class="g" onclick="harvestAll()">Harvest all (${ready})</button>`:""}</div>
+    <div class="card"><h2>🧺 Inventory</h2><p>Each crop you use gives its boost for 5 minutes. Using more adds more time.</p>${CROPS.map(c=>{ const k=S.inv[c.id]||0; return `<div class="up" style="margin:10px 0"><div class="ic">${c.i}</div><div class="mid"><b>${c.n} ×${k}</b><p>${c.desc}${buffOn(c.id)?" · ⏱️ "+left(S.buffs[c.id]-now):""}</p></div><button ${k?"":"disabled"} onclick="useCrop('${c.id}')">Use</button></div>`; }).join("")}</div>
+    <h2 style="margin:14px 4px 0">Farm upgrades</h2>${FARM_UPS.map(upCard).join("")}`;
   },
   news(){
     return [...UPDATES].reverse().map(u=>`<div class="card"><h2><span class="ver">v${u.v}</span> ${u.t}</h2>${u.n.map(x=>`<p>• ${x}</p>`).join("")}</div>`).join("")
     ;
   }
 };
-const TABS = [["mine","⛏️ Mine"],["up","⬆️ Upgrades"],["pets","🐾 Pets"],["news","📜 Updates"]];
+const getTabs = () => [...(AREAS[S.area].farm?[["farm","🌱 Farm"]]:[]),["mine","⛏️ Mine"],["up","⬆️ Upgrades"],["pets","🐾 Pets"],["news","📜 Updates"]];
 function render(){
-  $("#nav").innerHTML = TABS.map(t=>`<button class="${t[0]===view?"on":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("");
+  if(view==="farm" && !AREAS[S.area].farm) view="mine";
+  $("#nav").innerHTML = getTabs().map(t=>`<button class="${t[0]===view?"on":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("");
   $("#view").innerHTML = VIEWS[view]();
   live();
 }
@@ -402,7 +459,7 @@ setInterval(()=>{
   const r = U("auto").val(lvl("auto"));
   if(r>0 && S.am){ acc += r*0.1; while(acc>=1){ acc--; if(!mine(1,true)){ acc=0; break; } } live(); }
 },100);
-setInterval(()=>{ if(view==="up"||view==="pets") render(); save(); },1000);
+setInterval(()=>{ if(view==="up"||view==="pets"||view==="farm") render(); else live(); save(); },1000);
 render();
 </script>
 </body>
