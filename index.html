@@ -73,7 +73,7 @@ input{border:3px solid #1d2b4f;background:#fff;color:#1d2b4f}
 .fl{color:#fff;text-shadow:-2px 0 #1d2b4f,2px 0 #1d2b4f,0 -2px #1d2b4f,0 2px #1d2b4f}
 .Secret{border-color:#ff2bd6}.pet.gold{border-color:#ffb703;box-shadow:0 0 14px #ffd23f}
 #toast{max-width:92vw;text-align:center;white-space:pre-line;line-height:1.35}
-.Exclusive{border-color:#ff5d2e}.pet.Exclusive{box-shadow:0 0 14px #ff5d2e}.Divine{border-color:#00e5ff}.pet.Divine{box-shadow:0 0 12px #00e5ff}
+.pet b{position:absolute;left:4px;top:0;font-size:14px;cursor:pointer}.pet.sel{outline:4px solid var(--bad);outline-offset:-2px}.Exclusive{border-color:#ff5d2e}.pet.Exclusive{box-shadow:0 0 14px #ff5d2e}.Divine{border-color:#00e5ff}.pet.Divine{box-shadow:0 0 12px #00e5ff}
 </style>
 </head>
 <body>
@@ -101,6 +101,7 @@ const UPDATES = [
   { v: "1.2.0", t: "The Sky Update", n: ["New zone: Sky Citadel with 3 new ores (unlock for 6M)", "New Sky Egg with 6 new pets, including the Secret Celestial Peacock (0.1%) and the Divine Archangel Lion (0.01%)", "New upgrade: Double Drop (8 levels, ores can drop twice)", "New upgrade: Multi Hatch (2 levels, hatch x3 and then x5)", "Multi Hatch shows every pet you hatched in one list", "Sound effects and music, with a mute button in the top left corner"] },
   { v: "1.3.0", t: "The Exclusive Update", n: ["New rarity: Exclusive", "New pet: Rock (Exclusive) with a 0.001% chance from every egg. It is as strong as your best pet (100%, Golden Rock: 110%). It cannot drop from the Playtime Egg", "New ⏳ Playtime Egg above the Eggs: free, open it every 10 minutes. Only Exclusive pets: Clock Mouse (97%, 75% of your best pet, Golden 85%) and Chrono Turtle (3%, 100% of your best pet, Golden 110%)", "Exclusive pets cannot be used in Golden Merge","Removed the Daily Gift"] },
   { v: "1.4.0", t: "The Farm Update", n: ["New zone: Harvest Valley with 3 new ores (unlock for 80M)", "New Farm Egg with 6 new pets: 1 Rare, 1 Epic, 1 Legendary, 2 Secret (Pumpkin King 0.1%, Sunflower Sprite 0.05%) and 1 Divine (Harvest Stallion 0.005%)", "New 🌱 Farm tab (left of Mine, only visible in Harvest Valley): grow Apple, Banana, Carrot, Strawberry, Tomato, Corn and Grapes. Crops cost coins and take 15 minutes to grow", "Farm upgrades: Fertilizer (faster growing), Bigger Harvest (more crops per harvest) and More Plots", "Use crops from your farm inventory for 5 minute boosts (using more adds more time): Apple +25% coins, Banana +50% pickaxe power, Carrot +25% luck, Strawberry +2% golden chance, Tomato +10% bonus coins when selling, Corn +10% double drop, Grapes +25% pet bonus", "New Exclusive pet in the Playtime Egg: Time Wizard (0.1%, 120% of your best pet, Golden 130%)", "Rock can no longer be found in eggs (you keep the ones you already have)"] },
+  { v: "1.4.2", t: "Pet Tools Update", n: ["New Equip Best button in the Pets tab: equips your strongest pets", "Pet locking: tap the 🔓 on a pet to lock it. Locked pets cannot be released, multi deleted or used in Golden Merge until you unlock them", "New Multi Delete: select several pets and delete them at once (locked pets cannot be selected)", "New Merge All button in Golden Merge: merges every group of 5 identical pets into Golden pets in one tap"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -255,14 +256,28 @@ function hatchN(k,n){
 }
 function togDel(id){ const m=oddsGold?S.delg:S.del; m[id]=!m[id]; save(); render(); }
 function mergeInfo(){
-  const c={}; S.pets.forEach(p=>{ if(!p.g && !PETS.find(x=>x.id===p.id).f) c[p.id]=(c[p.id]||0)+1; });
+  const c={}; S.pets.forEach(p=>{ if(!p.g && !p.l && !PETS.find(x=>x.id===p.id).f) c[p.id]=(c[p.id]||0)+1; });
   return Object.keys(c).map(id=>{ const d=PETS.find(x=>x.id===id); return c[id]>=5 ? `<button class="g" onclick="merge('${id}')">${d.i} Merge ${d.n} x5</button>` : `<span class="chip">${d.i} ${d.n} ${c[id]}/5</span>`; }).join("") || "<p>No pets to merge yet.</p>";
 }
 function merge(id){
-  const idx = S.pets.map((p,i)=>({p,i})).filter(x=>x.p.id===id&&!x.p.g&&!PETS.find(y=>y.id===id).f).sort((a,b)=>a.p.on-b.p.on).slice(0,5).map(x=>x.i);
+  const idx = S.pets.map((p,i)=>({p,i})).filter(x=>x.p.id===id&&!x.p.g&&!x.p.l&&!PETS.find(y=>y.id===id).f).sort((a,b)=>a.p.on-b.p.on).slice(0,5).map(x=>x.i);
   if(idx.length<5||PETS.find(x=>x.id===id).f) return;
   S.pets = S.pets.filter((_,i)=>!idx.includes(i)); S.pets.push({id,on:false,g:true});
   toast("✨ Golden "+PETS.find(x=>x.id===id).n+" created!", true); save(); render();
+}
+const mergeable = p => !p.g && !p.l && !PETS.find(x=>x.id===p.id).f;
+function mergeCount(){ const c={}; S.pets.forEach(p=>{ if(mergeable(p)) c[p.id]=(c[p.id]||0)+1; }); return Object.values(c).reduce((a,n)=>a+Math.floor(n/5),0); }
+function mergeAll(){
+  let made=0;
+  for(const id of [...new Set(S.pets.map(p=>p.id))]){
+    while(true){
+      const idx = S.pets.map((p,i)=>({p,i})).filter(x=>x.p.id===id&&mergeable(x.p)).sort((a,b)=>a.p.on-b.p.on).slice(0,5).map(x=>x.i);
+      if(idx.length<5) break;
+      S.pets = S.pets.filter((_,i)=>!idx.includes(i)); S.pets.push({id,on:false,g:true}); made++;
+    }
+  }
+  if(!made) return toast("Nothing to merge yet");
+  toast("✨ Created "+made+" Golden pet"+(made>1?"s":"")+"!", true); save(); render();
 }
 function tog(id){ const k=id==="auto"?"am":"as"; S[k]=!S[k]; save(); render(); }
 function openPlaytime(){
@@ -321,12 +336,28 @@ function hatch(k,quiet){
   if(quiet) return nm+" ("+pick.r+")";
   toast("You hatched "+nm+" ("+pick.r+")!", true); save(); render();
 }
+let multiDel = false, selDel = new Set();
+function lockPet(i,e){ e.stopPropagation(); const p=S.pets[i]; p.l=!p.l; selDel.delete(i); sfx("click"); save(); render(); }
+function equipBest(){
+  const order = S.pets.map((p,i)=>({i,v:petVal(p)})).sort((a,b)=>b.v-a.v).slice(0,maxEq()).map(x=>x.i);
+  S.pets.forEach((p,i)=>p.on=order.includes(i));
+  toast("Equipped your "+order.length+" best pets!", true); sfx("magic"); save(); render();
+}
+function toggleMulti(){ multiDel=!multiDel; selDel.clear(); render(); }
+function delSelected(){
+  const idx=[...selDel].filter(i=>S.pets[i]&&!S.pets[i].l);
+  if(!idx.length) return toast("Select some pets first");
+  if(!confirm("Delete "+idx.length+" pet"+(idx.length>1?"s":"")+" forever?")) return;
+  S.pets = S.pets.filter((_,i)=>!idx.includes(i)); selDel.clear(); multiDel=false;
+  toast("🗑️ Deleted "+idx.length+" pet"+(idx.length>1?"s":"")); save(); render();
+}
 function togglePet(i){
+  if(multiDel){ if(S.pets[i].l) return toast("This pet is locked 🔒"); selDel.has(i)?selDel.delete(i):selDel.add(i); render(); return; }
   const p = S.pets[i];
   if(!p.on && S.pets.filter(x=>x.on).length>=maxEq()) return toast("Only "+maxEq()+" pets can be equipped");
   p.on = !p.on; save(); render();
 }
-function release(i,e){ e.stopPropagation(); const d=PETS.find(x=>x.id===S.pets[i].id); if(((d.r==="Common"||d.r==="Rare")&&!S.pets[i].g)||confirm("Release this "+(S.pets[i].g?"Golden ":"")+d.r+" pet forever?")){ S.pets.splice(i,1); save(); render(); } }
+function release(i,e){ e.stopPropagation(); if(S.pets[i].l) return toast("Unlock this pet first 🔒"); const d=PETS.find(x=>x.id===S.pets[i].id); if(((d.r==="Common"||d.r==="Rare")&&!S.pets[i].g)||confirm("Release this "+(S.pets[i].g?"Golden ":"")+d.r+" pet forever?")){ S.pets.splice(i,1); save(); render(); } }
 function resetGame(){ if(confirm("Delete ALL progress?")){ S = structuredClone(DEF); save(); render(); } }
 
 /* ===================== UI ===================== */
@@ -353,9 +384,9 @@ const VIEWS = {
     const eq = S.pets.filter(p=>p.on).length;
     const left = Math.max(0, PTEGG.wait-(Date.now()-S.pt)), full = S.pets.length>=maxPets(), mm = Math.floor(left/60000), ss = String(Math.floor(left%60000/1000)).padStart(2,"0");
     return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round(petMult()*100)}%</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${S.coins<g.cost||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">🪙 ${fmt(g.cost)}</button>${lvl("multi")?`<button class="g" ${S.coins<g.cost*[1,3,5][lvl("multi")]||S.pets.length+[1,3,5][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5][lvl("multi")]})">x${[1,3,5][lvl("multi")]}</button>`:""}</div>`})()}<div class="up" style="margin-top:14px;padding-top:10px;border-top:2px dashed rgba(128,128,128,.4)"><div class="ic">${PTEGG.i}</div><div class="mid"><b>${PTEGG.n}</b><p>Free every 10 minutes. Only Exclusive pets!</p></div><button class="${left||full?"":"g"}" ${left||full?"disabled":""} onclick="openPlaytime()">${left?mm+":"+ss:full?"Storage full":"Open"}</button></div></div>
-    <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><div class="grid">${mergeInfo()}</div></div>
-    <div class="card"><h2>Your pets</h2>${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""} ${p.g?"gold":""}" onclick="togglePet(${i})"><u onclick="release(${i},event)">✕</u><span>${d.i}</span>${p.g?"Golden ":""}${d.n}<br>${d.f?Math.round((p.g?d.fg:d.f)*100)+"% of best (+":"+"}${Math.round(petVal(p)*100)}%${d.f?")":""} · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
-    <p>Tap a pet to equip or unequip it.</p></div>
+    <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><button class="g" style="margin:8px 0" ${mergeCount()?"":"disabled"} onclick="mergeAll()">✨ Merge All (${mergeCount()})</button><div class="grid">${mergeInfo()}</div></div>
+    <div class="card"><h2>Your pets</h2>${S.pets.length?`<div class="row" style="margin:8px 0;flex-wrap:wrap">${multiDel?`<button class="g" style="flex:1" onclick="delSelected()">🗑️ Delete selected (${selDel.size})</button><button class="s" style="flex:1" onclick="toggleMulti()">Cancel</button>`:`<button class="g" style="flex:1" onclick="equipBest()">⭐ Equip Best</button><button class="s" style="flex:1" onclick="toggleMulti()">🗑️ Multi Delete</button>`}</div>`:""}${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""} ${p.g?"gold":""} ${selDel.has(i)?"sel":""}" onclick="togglePet(${i})"><b onclick="lockPet(${i},event)">${p.l?"🔒":"🔓"}</b>${p.l?"":`<u onclick="release(${i},event)">✕</u>`}<span>${d.i}</span>${p.g?"Golden ":""}${d.n}<br>${d.f?Math.round((p.g?d.fg:d.f)*100)+"% of best (+":"+"}${Math.round(petVal(p)*100)}%${d.f?")":""} · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
+    <p>${multiDel?"Tap pets to select them for deletion.":"Tap a pet to equip or unequip it. Tap 🔓 to lock it."}</p></div>
     <div class="card"><h2>${EGGS[S.area].n} odds</h2><div class="row" style="margin-bottom:8px"><button style="flex:1" class="${oddsGold?"s":""}" onclick="oddsGold=false;render()">Normal</button><button style="flex:1" class="${oddsGold?"":"s"}" onclick="oddsGold=true;render()">✨ Golden</button></div><p>Tap a pet to auto-delete it when it drops (🗑️).</p><div class="grid">${eggPets(EGGS[S.area]).map(x=>`<span class="chip" style="cursor:pointer;${(oddsGold?S.delg:S.del)[x.p.id]?"opacity:.5;text-decoration:line-through":""}" onclick="togDel('${x.p.id}')">${(oddsGold?S.delg:S.del)[x.p.id]?"🗑️ ":""}${x.p.i} ${oddsGold?"Golden ":""}${x.p.n} · ${x.p.r} · ${fp(x.pct*(oddsGold?goldChance():1-goldChance()))}%</span>`).join("")}</div></div>
     <div class="card"><h2>⏳ Playtime Egg odds</h2><div class="row" style="margin-bottom:8px"><button style="flex:1" class="${oddsGold?"s":""}" onclick="oddsGold=false;render()">Normal</button><button style="flex:1" class="${oddsGold?"":"s"}" onclick="oddsGold=true;render()">✨ Golden</button></div><p>Tap a pet to auto-delete it when it drops (🗑️).</p><div class="grid">${eggPets(PTEGG).map(x=>`<span class="chip" style="cursor:pointer;${(oddsGold?S.delg:S.del)[x.p.id]?"opacity:.5;text-decoration:line-through":""}" onclick="togDel('${x.p.id}')">${(oddsGold?S.delg:S.del)[x.p.id]?"🗑️ ":""}${x.p.i} ${oddsGold?"Golden ":""}${x.p.n} · ${x.p.r} · ${fp(x.pct*(oddsGold?goldChance():1-goldChance()))}%</span>`).join("")}</div></div>`;
   },
@@ -445,6 +476,7 @@ function wrap(name,fn){ const o=window[name]; window[name]=function(...a){ retur
 wrap("sell",(o,a)=>{ const c=S.coins; o(...a); if(S.coins>c) sfx("coin"); });
 wrap("buyUp",(o,a)=>{ const c=S.coins; o(...a); if(S.coins<c) sfx("buy"); });
 wrap("zone",(o,a)=>{ const c=S.coins, z=S.area; o(...a); if(S.coins<c) sfx("buy"); else if(S.area!==z) sfx("click"); });
+wrap("mergeAll",(o,a)=>{ const n=S.pets.length; o(...a); if(S.pets.length<n) sfx("magic"); });
 wrap("merge",(o,a)=>{ const n=S.pets.length; o(...a); if(S.pets.length<n) sfx("magic"); });
 wrap("autoSell",(o,a)=>{ const r=o(...a); if(r) sfx("coin"); return r; });
 wrap("toast",(o,a)=>{
