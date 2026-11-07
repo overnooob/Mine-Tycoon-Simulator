@@ -103,7 +103,7 @@ const UPDATES = [
   { v: "1.3.0", t: "The Exclusive Update", n: ["New rarity: Exclusive", "New pet: Rock (Exclusive) with a 0.001% chance from every egg. It is as strong as your best pet (100%, Golden Rock: 110%). It cannot drop from the Playtime Egg", "New ⏳ Playtime Egg above the Eggs: free, open it every 10 minutes. Only Exclusive pets: Clock Mouse (97%, 75% of your best pet, Golden 85%) and Chrono Turtle (3%, 100% of your best pet, Golden 110%)", "Exclusive pets cannot be used in Golden Merge","Removed the Daily Gift"] },
   { v: "1.4.0", t: "The Farm Update", n: ["New zone: Harvest Valley with 3 new ores (unlock for 80M)", "New Farm Egg with 6 new pets: 1 Rare, 1 Epic, 1 Legendary, 2 Secret (Pumpkin King 0.1%, Sunflower Sprite 0.05%) and 1 Divine (Harvest Stallion 0.005%)", "New 🌱 Farm tab (left of Mine, only visible in Harvest Valley): grow Apple, Banana, Carrot, Strawberry, Tomato, Corn and Grapes. Crops cost coins and take 15 minutes to grow", "Farm upgrades: Fertilizer (faster growing), Bigger Harvest (more crops per harvest) and More Plots", "Use crops from your farm inventory for 5 minute boosts (using more adds more time): Apple +25% coins, Banana +50% pickaxe power, Carrot +25% luck, Strawberry +2% golden chance, Tomato +10% bonus coins when selling, Corn +10% double drop, Grapes +25% pet bonus", "New Exclusive pet in the Playtime Egg: Time Wizard (0.1%, 120% of your best pet, Golden 130%)", "Rock can no longer be found in eggs (you keep the ones you already have)"] },
   { v: "1.4.2", t: "Pet Tools Update", n: ["New Equip Best button in the Pets tab: equips your strongest pets", "Pet locking: tap the 🔓 on a pet to lock it. Locked pets cannot be released, multi deleted or used in Golden Merge until you unlock them", "New Multi Delete: select several pets and delete them at once (locked pets cannot be selected)", "New Merge All button in Golden Merge: merges every group of 5 identical pets into Golden pets in one tap"] },
-  { v: "1.5.0", t: "The Autumn Event", n: ["New event zone: Autumn Event, on the left of Stone Quarry (free to enter)", "New currency: 🍁 Maple Leaves. Event ores (Acorn, Mushroom, Pumpkin) sell for Leaves", "4 new Event upgrades paid with Leaves: Rake Power, Leaf Polisher, Lucky Acorn and Egg Discount", "New Autumn Egg (paid with Leaves) with 7 event pets: Common, Rare, Epic, Legendary, Secret (0.1%), Divine (0.005%) and Exclusive (0.00005%)", "Event pets boost your Leaves and give no coin bonus. Normal pets boost coins and give no Leaves bonus", "Equip Best now works per zone type: in the event it equips your best event pets, in normal zones your best coin pets", "One more level for Multi Hatch (x10), More Storage (up to 30 pet slots) and Pet Slots (equip up to 7 pets)", "Exclusive pets with \"% of best\" (Rock, Clock Mouse, Chrono Turtle, Time Wizard and Acorn) now work in both normal zones and the event: they copy your best coin pet for coins and your best event pet for Leaves (they take a slot in both)", "Exclusive event pet Acorn gives 100% of your best event pet (Golden: 110%)"] },
+  { v: "1.5.0", t: "The Autumn Event", n: ["New event zone: Autumn Event, on the left of Stone Quarry (free to enter)", "New currency: 🍁 Maple Leaves. Event ores (Acorn, Mushroom, Pumpkin) sell for Leaves", "4 new Event upgrades paid with Leaves: Rake Power, Leaf Polisher, Lucky Acorn and Egg Discount", "New Autumn Egg (paid with Leaves) with 7 event pets: Common, Rare, Epic, Legendary, Secret (0.1%), Divine (0.005%) and Exclusive (0.00005%)", "Event pets boost your Leaves and give no coin bonus. Normal pets boost coins and give no Leaves bonus", "Equip Best equips the best pets for the zone you are in: in the event the ones that give the most 🍁 Leaves, in normal zones the ones that give the most 🪙 coins. You have one shared set of pet slots everywhere", "One more level for Multi Hatch (x10), More Storage (up to 30 pet slots) and Pet Slots (equip up to 7 pets)", "Exclusive pets with \"% of best\" (Rock, Clock Mouse, Chrono Turtle, Time Wizard and Acorn) now work in both normal zones and the event: they copy your best coin pet for coins and your best event pet for Leaves", "Exclusive event pet Acorn gives 100% of your best event pet (Golden: 110%)"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -240,7 +240,6 @@ const ORE = {}, EVORE = {}; AREAS.forEach(a=>a.ores.forEach(o=>{ ORE[o[0]]=o; if
 const isEv = p => { const d=PETS.find(x=>x.id===p.id); return !!d.ev && !d.f; };
 // "% of best" pets (f) work in BOTH coin zones and the event; other pets only work in their own category
 const inCat = (p,ev) => { const d=PETS.find(x=>x.id===p.id); return !!(d.f || !!d.ev===!!ev); };
-const onCount = ev => S.pets.filter(x=>x.on&&inCat(x,ev)).length;
 const bestPet = ev => S.pets.reduce((b,p)=>{ const d=PETS.find(x=>x.id===p.id); return (d.f || !!d.ev!==!!ev) ? b : Math.max(b, d.m*(p.g?2:1)); },0);
 const petVal = (p,ev) => { const d=PETS.find(x=>x.id===p.id); return d.f ? bestPet(ev)*(p.g?d.fg:d.f) : d.m*(p.g?2:1); };
 const petMult = () => S.pets.filter(p=>p.on&&inCat(p,false)).reduce((a,p)=>a+petVal(p,false),0) * (buffOn("grapes")?1.25:1);
@@ -367,18 +366,11 @@ function hatch(k,quiet){
 let multiDel = false, selDel = new Set();
 function lockPet(i,e){ e.stopPropagation(); const p=S.pets[i]; p.l=!p.l; selDel.delete(i); sfx("click"); save(); render(); }
 function equipBest(){
-  const ev = !!AREAS[S.area].event, max = maxEq();
-  // "% of best" pets take a slot in both categories, so keep the other category within its limit
-  const otherOn = S.pets.filter(p=>p.on&&!PETS.find(x=>x.id===p.id).f&&inCat(p,!ev)).length;
-  let fLeft = Math.max(0, max-otherOn);
-  const order = [];
-  S.pets.map((p,i)=>({i,v:petVal(p,ev),f:!!PETS.find(x=>x.id===p.id).f,ok:inCat(p,ev)})).filter(x=>x.ok).sort((a,b)=>b.v-a.v).forEach(x=>{
-    if(order.length>=max) return;
-    if(x.f){ if(fLeft<=0) return; fLeft--; }
-    order.push(x.i);
-  });
-  S.pets.forEach((p,i)=>{ if(inCat(p,ev)) p.on=order.includes(i); });
-  toast("Equipped your "+order.length+" best "+(ev?"event (🍁)":"coin (🪙)")+" pets!", true); sfx("magic"); save(); render();
+  const ev = !!AREAS[S.area].event;
+  // one shared set of pet slots: pick the pets that give the most for this zone (Leaves in the event, coins elsewhere)
+  const order = S.pets.map((p,i)=>({i,v:petVal(p,ev),ok:inCat(p,ev)})).filter(x=>x.ok).sort((a,b)=>b.v-a.v).slice(0,maxEq()).map(x=>x.i);
+  S.pets.forEach((p,i)=>p.on=order.includes(i));
+  toast("Equipped your "+order.length+" best pets for "+(ev?"🍁 Leaves":"🪙 coins")+"!", true); sfx("magic"); save(); render();
 }
 function toggleMulti(){ multiDel=!multiDel; selDel.clear(); render(); }
 function delSelected(){
@@ -391,7 +383,7 @@ function delSelected(){
 function togglePet(i){
   if(multiDel){ if(S.pets[i].l) return toast("This pet is locked 🔒"); selDel.has(i)?selDel.delete(i):selDel.add(i); render(); return; }
   const p = S.pets[i];
-  if(!p.on){ const d=PETS.find(x=>x.id===p.id); if((d.f?[false,true]:[!!d.ev]).some(c=>onCount(c)>=maxEq())) return toast("Only "+maxEq()+" pets can be equipped"); }
+  if(!p.on && S.pets.filter(x=>x.on).length>=maxEq()) return toast("Only "+maxEq()+" pets can be equipped");
   p.on = !p.on; save(); render();
 }
 function release(i,e){ e.stopPropagation(); if(S.pets[i].l) return toast("Unlock this pet first 🔒"); const d=PETS.find(x=>x.id===S.pets[i].id); if(((d.r==="Common"||d.r==="Rare")&&!S.pets[i].g)||confirm("Release this "+(S.pets[i].g?"Golden ":"")+d.r+" pet forever?")){ S.pets.splice(i,1); save(); render(); } }
@@ -418,7 +410,7 @@ const VIEWS = {
   },
   up(){ return UPGRADES.map(upCard).join("") + `<h2 style="margin:14px 4px 0">🍂 Autumn Event upgrades</h2><p style="margin:0 4px 6px">Paid with 🍁 Leaves. The mining ones only work in the event zone.</p>` + EVENT_UPS.map(upCard).join(""); },
   pets(){
-    const evz = !!AREAS[S.area].event, eq = onCount(evz);
+    const evz = !!AREAS[S.area].event, eq = S.pets.filter(p=>p.on).length;
     const left = Math.max(0, PTEGG.wait-(Date.now()-S.pt)), full = S.pets.length>=maxPets(), mm = Math.floor(left/60000), ss = String(Math.floor(left%60000/1000)).padStart(2,"0");
     return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round((evz?evPetMult():petMult())*100)}% ${evz?"🍁 Leaves":"🪙 Coins"}</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${eggCur(g)<eggCost(g)||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">${eggIcon(g)} ${fmt(eggCost(g))}</button>${lvl("multi")?`<button class="g" ${eggCur(g)<eggCost(g)*[1,3,5,10][lvl("multi")]||S.pets.length+[1,3,5,10][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5,10][lvl("multi")]})">x${[1,3,5,10][lvl("multi")]}</button>`:""}</div>`})()}<div class="up" style="margin-top:14px;padding-top:10px;border-top:2px dashed rgba(128,128,128,.4)"><div class="ic">${PTEGG.i}</div><div class="mid"><b>${PTEGG.n}</b><p>Free every 10 minutes. Only Exclusive pets!</p></div><button class="${left||full?"":"g"}" ${left||full?"disabled":""} onclick="openPlaytime()">${left?mm+":"+ss:full?"Storage full":"Open"}</button></div></div>
     <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><button class="g" style="margin:8px 0" ${mergeCount()?"":"disabled"} onclick="mergeAll()">✨ Merge All (${mergeCount()})</button><div class="grid">${mergeInfo()}</div></div>
