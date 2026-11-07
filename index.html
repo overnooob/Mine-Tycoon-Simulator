@@ -104,6 +104,7 @@ const UPDATES = [
   { v: "1.4.0", t: "The Farm Update", n: ["New zone: Harvest Valley with 3 new ores (unlock for 80M)", "New Farm Egg with 6 new pets: 1 Rare, 1 Epic, 1 Legendary, 2 Secret (Pumpkin King 0.1%, Sunflower Sprite 0.05%) and 1 Divine (Harvest Stallion 0.005%)", "New 🌱 Farm tab (left of Mine, only visible in Harvest Valley): grow Apple, Banana, Carrot, Strawberry, Tomato, Corn and Grapes. Crops cost coins and take 15 minutes to grow", "Farm upgrades: Fertilizer (faster growing), Bigger Harvest (more crops per harvest) and More Plots", "Use crops from your farm inventory for 5 minute boosts (using more adds more time): Apple +25% coins, Banana +50% pickaxe power, Carrot +25% luck, Strawberry +2% golden chance, Tomato +10% bonus coins when selling, Corn +10% double drop, Grapes +25% pet bonus", "New Exclusive pet in the Playtime Egg: Time Wizard (0.1%, 120% of your best pet, Golden 130%)", "Rock can no longer be found in eggs (you keep the ones you already have)"] },
   { v: "1.4.2", t: "Pet Tools Update", n: ["New Equip Best button in the Pets tab: equips your strongest pets", "Pet locking: tap the 🔓 on a pet to lock it. Locked pets cannot be released, multi deleted or used in Golden Merge until you unlock them", "New Multi Delete: select several pets and delete them at once (locked pets cannot be selected)", "New Merge All button in Golden Merge: merges every group of 5 identical pets into Golden pets in one tap"] },
   { v: "1.5.0", t: "The Autumn Event", n: ["New event zone: Autumn Event, on the left of Stone Quarry (free to enter)", "New currency: 🍁 Maple Leaves. Event ores (Acorn, Mushroom, Pumpkin) sell for Leaves", "4 new Event upgrades paid with Leaves: Rake Power, Leaf Polisher, Lucky Acorn and Egg Discount", "New Autumn Egg (paid with Leaves) with 7 event pets: Common, Rare, Epic, Legendary, Secret (0.1%), Divine (0.005%) and Exclusive (0.00005%)", "Event pets boost your Leaves and give no coin bonus. Normal pets boost coins and give no Leaves bonus", "Equip Best equips the best pets for the zone you are in: in the event the ones that give the most 🍁 Leaves, in normal zones the ones that give the most 🪙 coins. You have one shared set of pet slots everywhere", "One more level for Multi Hatch (x10), More Storage (up to 30 pet slots) and Pet Slots (equip up to 7 pets)", "Exclusive pets with \"% of best\" (Rock, Clock Mouse, Chrono Turtle, Time Wizard and Acorn) now work in both normal zones and the event: they copy your best coin pet for coins and your best event pet for Leaves", "Exclusive event pet Acorn gives 100% of your best event pet (Golden: 110%)"] },
+  { v: "1.5.1", t: "Auto Hatch Update", n: ["New 🔁 Auto Hatch in the Pets tab: opens eggs for you every second", "Pick how many eggs to open each time (x1, and x3, x5, x10 as you unlock them with Multi Hatch)", "Auto Hatch only runs while you stay on the Pets tab. When you leave it (Mine, Upgrades, Updates...) it stops, and it also stops when you run out of coins/Leaves or pet storage is full"] },
   // Add new updates above this line
 ];
 const VERSION = UPDATES[UPDATES.length - 1].v;
@@ -225,7 +226,7 @@ const PETS = [ // r = rarity, m = coin bonus, w = hatch weight
 
 /* ===================== STATE ===================== */
 const DEF = { mute:false, del:{}, delg:{}, pt:0, leaves:0, plots:[], inv:{}, buffs:{}, am:true, as:true, coins:0, bag:{}, up:{}, area:0, unlocked:[0], pets:[], mined:0 };
-let S = load(), view = "mine", acc = 0;
+let S = load(), view = "mine", acc = 0, autoHatch = false, autoAmt = 1; // Auto Hatch is not saved: it always starts off
 function load(){ try{ const r = JSON.parse(localStorage.getItem(KEY)); if(r) return Object.assign(structuredClone(DEF), r); }catch(e){} return structuredClone(DEF); }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 
@@ -276,6 +277,15 @@ function clickRock(e){
 }
 function sellValue(){ return Math.floor(Object.entries(S.bag).reduce((a,[k,c])=>a+(EVORE[k]?0:ORE[k][2]*c),0)*coinMult()); }
 function sellLeaves(){ return Math.floor(Object.entries(S.bag).reduce((a,[k,c])=>a+(EVORE[k]?ORE[k][2]*c:0),0)*evMult()); }
+function autoOpts(){ return [1,3,5,10].slice(0,lvl("multi")+1); }
+function toggleAuto(){ autoHatch=!autoHatch; if(autoHatch) autoTick(); else render(); }
+function autoTick(){
+  if(!autoHatch || view!=="pets") return;
+  const k=S.area, g=EGGS[k], n=autoAmt;
+  if(S.pets.length+n>maxPets()){ autoHatch=false; render(); return toast("Auto Hatch stopped: pet storage is full"); }
+  if(eggCur(g)<eggCost(g)*n){ autoHatch=false; render(); return toast("Auto Hatch stopped: not enough "+(g.ev?"Leaves":"coins")); }
+  hatchN(k,n);
+}
 function hatchN(k,n){
   const res=[]; for(let i=0;i<n;i++){ const r=hatch(k,true); if(r) res.push(r); }
   if(!res.length) return; save(); render(); toast("You hatched:\n"+res.join("\n"), true);
@@ -412,7 +422,7 @@ const VIEWS = {
   pets(){
     const evz = !!AREAS[S.area].event, eq = S.pets.filter(p=>p.on).length;
     const left = Math.max(0, PTEGG.wait-(Date.now()-S.pt)), full = S.pets.length>=maxPets(), mm = Math.floor(left/60000), ss = String(Math.floor(left%60000/1000)).padStart(2,"0");
-    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round((evz?evPetMult():petMult())*100)}% ${evz?"🍁 Leaves":"🪙 Coins"}</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${eggCur(g)<eggCost(g)||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">${eggIcon(g)} ${fmt(eggCost(g))}</button>${lvl("multi")?`<button class="g" ${eggCur(g)<eggCost(g)*[1,3,5,10][lvl("multi")]||S.pets.length+[1,3,5,10][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5,10][lvl("multi")]})">x${[1,3,5,10][lvl("multi")]}</button>`:""}</div>`})()}<div class="up" style="margin-top:14px;padding-top:10px;border-top:2px dashed rgba(128,128,128,.4)"><div class="ic">${PTEGG.i}</div><div class="mid"><b>${PTEGG.n}</b><p>Free every 10 minutes. Only Exclusive pets!</p></div><button class="${left||full?"":"g"}" ${left||full?"disabled":""} onclick="openPlaytime()">${left?mm+":"+ss:full?"Storage full":"Open"}</button></div></div>
+    return `<div class="card"><h2>🥚 Eggs</h2><p>Storage ${S.pets.length}/${maxPets()} · Equipped ${eq}/${maxEq()} · Bonus +${Math.round((evz?evPetMult():petMult())*100)}% ${evz?"🍁 Leaves":"🪙 Coins"}</p>${(()=>{const g=EGGS[S.area],k=S.area;return `<div class="up" style="margin-top:10px"><div class="ic">${g.i}</div><div class="mid"><b>${g.n}</b><p>Found in ${AREAS[k].name}. Switch zones to hatch other eggs.</p></div><button ${eggCur(g)<eggCost(g)||S.pets.length>=maxPets()?"disabled":""} onclick="hatch(${k})">${eggIcon(g)} ${fmt(eggCost(g))}</button>${lvl("multi")?`<button class="g" ${eggCur(g)<eggCost(g)*[1,3,5,10][lvl("multi")]||S.pets.length+[1,3,5,10][lvl("multi")]>maxPets()?"disabled":""} onclick="hatchN(${k},${[1,3,5,10][lvl("multi")]})">x${[1,3,5,10][lvl("multi")]}</button>`:""}</div>`})()}<div style="margin-top:12px"><b>🔁 Auto Hatch</b><p>Opens eggs every second. It stops when you leave this tab.</p><div class="row" style="flex-wrap:wrap;margin-top:6px">${autoOpts().map(n=>`<button class="${autoAmt===n?"":"s"}" style="flex:1" onclick="autoAmt=${n};render()">x${n}</button>`).join("")}<button class="${autoHatch?"":"g"}" style="flex:2" onclick="toggleAuto()">${autoHatch?"⏹ Stop":"▶ Start"}</button></div></div><div class="up" style="margin-top:14px;padding-top:10px;border-top:2px dashed rgba(128,128,128,.4)"><div class="ic">${PTEGG.i}</div><div class="mid"><b>${PTEGG.n}</b><p>Free every 10 minutes. Only Exclusive pets!</p></div><button class="${left||full?"":"g"}" ${left||full?"disabled":""} onclick="openPlaytime()">${left?mm+":"+ss:full?"Storage full":"Open"}</button></div></div>
     <div class="card"><h2>✨ Golden Merge</h2><p>Combine 5 identical pets into 1 Golden pet with double bonus.</p><button class="g" style="margin:8px 0" ${mergeCount()?"":"disabled"} onclick="mergeAll()">✨ Merge All (${mergeCount()})</button><div class="grid">${mergeInfo()}</div></div>
     <div class="card"><h2>Your pets</h2>${S.pets.length?`<div class="row" style="margin:8px 0;flex-wrap:wrap">${multiDel?`<button class="g" style="flex:1" onclick="delSelected()">🗑️ Delete selected (${selDel.size})</button><button class="s" style="flex:1" onclick="toggleMulti()">Cancel</button>`:`<button class="g" style="flex:1" onclick="equipBest()">⭐ Equip Best</button><button class="s" style="flex:1" onclick="toggleMulti()">🗑️ Multi Delete</button>`}</div>`:""}${S.pets.length?S.pets.map((p,i)=>{const d=PETS.find(x=>x.id===p.id);return `<div class="pet ${d.r} ${p.on?"on":""} ${p.g?"gold":""} ${selDel.has(i)?"sel":""}" onclick="togglePet(${i})"><b onclick="lockPet(${i},event)">${p.l?"🔒":"🔓"}</b>${p.l?"":`<u onclick="release(${i},event)">✕</u>`}<span>${d.i}</span>${p.g?"Golden ":""}${d.n}<br>${d.f?Math.round((p.g?d.fg:d.f)*100)+"% of best<br>(+"+Math.round(petVal(p,false)*100)+"% 🪙 · +"+Math.round(petVal(p,true)*100)+"% 🍁)":"+"+Math.round(petVal(p)*100)+"%"+(d.ev?" 🍁":" 🪙")} · ${d.r}</div>`}).join(""):"<p>No pets yet. Hatch an egg!</p>"}
     <p>${multiDel?"Tap pets to select them for deletion.":"Tap a pet to equip or unequip it. Tap 🔓 to lock it."}</p></div>
@@ -440,6 +450,8 @@ const VIEWS = {
 };
 const getTabs = () => [...(AREAS[S.area].farm?[["farm","🌱 Farm"]]:[]),["mine","⛏️ Mine"],["up","⬆️ Upgrades"],["pets","🐾 Pets"],["news","📜 Updates"]];
 function render(){
+  if(view!=="pets") autoHatch=false;
+  if(!autoOpts().includes(autoAmt)) autoAmt=1;
   if(view==="farm" && !AREAS[S.area].farm) view="mine";
   $("#nav").innerHTML = getTabs().map(t=>`<button class="${t[0]===view?"on":""}" onclick="view='${t[0]}';render()">${t[1]}</button>`).join("");
   $("#view").innerHTML = VIEWS[view]();
@@ -521,7 +533,7 @@ setInterval(()=>{
   const r = U("auto").val(lvl("auto"));
   if(r>0 && S.am){ acc += r*0.1; while(acc>=1){ acc--; if(!mine(1,true)){ acc=0; break; } } live(); }
 },100);
-setInterval(()=>{ if(view==="up"||view==="pets"||view==="farm") render(); else live(); save(); },1000);
+setInterval(()=>{ autoTick(); if(view==="up"||view==="pets"||view==="farm") render(); else live(); save(); },1000);
 render();
 </script>
 </body>
